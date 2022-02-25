@@ -85,7 +85,9 @@ impl ConnectionManager {
         if let Some(handle) = self.join_handle_for_check_peers.as_mut() {
             handle.abort();
             handle.await.unwrap_or_else(|err| {
-                error!("Error occurred when closing connection: {:?}", err);
+                if !err.is_cancelled() {
+                    error!("Error occurred when closing connection: {:?}", err);
+                }
             });
         }
         if let Some(handle) = self.join_handle_for_listen.as_mut() {
@@ -93,7 +95,9 @@ impl ConnectionManager {
             handle
                 .await
                 .unwrap_or_else(|err| {
-                    error!("Error occurred when closing connection: {:?}", err);
+                    if !err.is_cancelled() {
+                        error!("Error occurred when closing connection: {:?}", err);
+                    }
                     Ok(())
                 })
                 .unwrap_or_else(|err| {
