@@ -110,7 +110,7 @@ impl ConnectionManager {
     pub async fn join_network(&self, target_addr: SocketAddr) -> Result<()> {
         info!("Send request to join network to: {}", target_addr);
         let mut stream = TcpStream::connect(target_addr).await?;
-        let payload = Payload::Add { field1: 0 };
+        let payload = Payload::Add {};
         let msg = Message::new(self.addr.port(), payload);
         stream
             .write_all(serde_json::to_string(&msg)?.as_bytes())

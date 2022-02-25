@@ -41,9 +41,8 @@ impl Message {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "msg_type")]
 pub enum Payload {
-    // TODO: remove field1
     #[serde(rename = "0")]
-    Add { field1: u8 },
+    Add,
     #[serde(rename = "1")]
     Remove,
     #[serde(rename = "2")]
@@ -61,24 +60,35 @@ pub enum Payload {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
-    fn test_deserialize_message_add() {
+    fn test_deserialize_message_core_list() {
         let raw = r#"{
           "protocol": "simple_bitcoin_protocol",
           "version": "0.1.0",
           "port": 12345,
-          "msg_type": "0",
-          "field1": 1
+          "msg_type": "2",
+          "nodes": ["127.0.0.1:12345"]
         }"#;
-        let expected = Message::new(12345, Payload::Add { field1: 1 });
+        let expected = Message::new(
+            12345,
+            Payload::CoreList {
+                nodes: vec![SocketAddr::from_str("127.0.0.1:12345").unwrap()],
+            },
+        );
         let actual: Message = serde_json::from_str(raw).unwrap();
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_round_trip_message_add() {
-        let message = Message::new(12345, Payload::Add { field1: 1 });
+    fn test_round_trip_message_core_list() {
+        let message = Message::new(
+            12345,
+            Payload::CoreList {
+                nodes: vec![SocketAddr::from_str("127.0.0.1:12345").unwrap()],
+            },
+        );
 
         let actual = serde_json::to_string(&message).unwrap();
         let actual: Message = serde_json::from_str(&actual[..]).unwrap();
