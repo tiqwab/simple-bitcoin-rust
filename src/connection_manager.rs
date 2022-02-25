@@ -12,14 +12,17 @@ use tokio::task::JoinHandle;
 pub struct ConnectionManagerInner {
     addr: SocketAddr,
     core_node_set: HashSet<SocketAddr>,
+    edge_node_set: HashSet<SocketAddr>,
 }
 
 impl ConnectionManagerInner {
     pub fn new(addr: SocketAddr) -> ConnectionManagerInner {
         let node_set = HashSet::<SocketAddr>::new();
+        let edge_set = HashSet::<SocketAddr>::new();
         let mut manager = ConnectionManagerInner {
             addr: addr.clone(),
             core_node_set: node_set,
+            edge_node_set: edge_set,
         };
         manager.add_peer(addr);
         manager
@@ -36,6 +39,20 @@ impl ConnectionManagerInner {
         debug!("Removing peer: {}", peer);
         let res = self.core_node_set.remove(peer);
         debug!("Current Core list: {:?}", self.core_node_set);
+        res
+    }
+
+    // 新たに接続された Edge ノードをリストに追加する
+    fn add_edge(&mut self, edge: SocketAddr) -> bool {
+        debug!("Adding edge: {}", edge);
+        self.edge_node_set.insert(edge)
+    }
+
+    // 離脱した Edge ノードをリストから削除する
+    fn remove_edge(&mut self, edge: &SocketAddr) -> bool {
+        debug!("Removing edge: {}", edge);
+        let res = self.edge_node_set.remove(edge);
+        debug!("Current Edge list: {:?}", self.edge_node_set);
         res
     }
 
@@ -81,7 +98,7 @@ impl ConnectionManager {
     }
 
     // 終了前の処理としてソケットを閉じる (ServerCore 向け)
-    pub async fn connection_close(&mut self) {
+    pub async fn connection_close(&mut self, core_node_addr: Option<&SocketAddr>) {
         if let Some(handle) = self.join_handle_for_check_peers.as_mut() {
             handle.abort();
             handle.await.unwrap_or_else(|err| {
@@ -103,6 +120,16 @@ impl ConnectionManager {
                 .unwrap_or_else(|err| {
                     error!("Error occurred when waiting_for_access: {:?}", err);
                 });
+        }
+
+        if let Some(core_addr) = core_node_addr {
+            let manager_port = self.addr.port();
+            Self::send_msg(
+                Arc::clone(&self.inner),
+                core_addr,
+                Message::new(manager_port, Payload::Remove {}),
+            )
+            .await;
         }
     }
 
@@ -189,8 +216,15 @@ impl ConnectionManager {
                 Self::send_msg(manager, &peer_addr, Message::new(manager_port, payload)).await;
             }
             Payload::Ping => {}
-            Payload::AddAsEdge => {}
-            Payload::RemoveEdge => {}
+            Payload::AddAsEdge => {
+                manager.lock().unwrap().add_edge(peer_addr);
+                let nodes = manager.lock().unwrap().get_core_nodes();
+                let payload = Payload::CoreList { nodes };
+                Self::send_msg(manager, &peer_addr, Message::new(manager_port, payload)).await;
+            }
+            Payload::RemoveEdge => {
+                manager.lock().unwrap().remove_edge(&peer_addr);
+            }
         }
 
         Ok(())

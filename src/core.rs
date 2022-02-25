@@ -47,7 +47,7 @@ impl ServerCore {
     pub async fn shutdown(&mut self) {
         self.state = ServerCoreState::ShuttingDown;
         info!("Shutdown ServerCore...");
-        self.cm.connection_close().await;
+        self.cm.connection_close(self.core_node_addr.as_ref()).await;
     }
 
     pub fn get_my_current_state(&self) -> &ServerCoreState {
