@@ -1,11 +1,48 @@
 use anyhow::Result;
-use std::io::Write;
-use std::net::TcpStream;
+use clap::Parser;
+use futures::StreamExt;
+use signal_hook::consts::signal::*;
+use signal_hook_tokio::Signals;
+use simple_bitcoin::client_core::ClientCore;
+use std::net::SocketAddr;
 
-fn main() -> Result<()> {
+/// Simple Bitcoin client
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(short, long)]
+    listen_addr: SocketAddr,
+    #[clap(short, long)]
+    core_addr: SocketAddr,
+}
+
+async fn handle_signals(mut signals: Signals) {
+    while let Some(signal) = signals.next().await {
+        match signal {
+            SIGTERM | SIGINT | SIGQUIT => {
+                break;
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     env_logger::init();
-    let mut stream = TcpStream::connect("127.0.0.1:50030")?;
-    let my_text = "Hello! This is test message from my sample client!";
-    stream.write_all(my_text.as_bytes())?;
+
+    let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
+    let handle = signals.handle();
+    let signal_task = tokio::spawn(handle_signals(signals));
+
+    let args = Args::parse();
+    let mut core = ClientCore::new(args.listen_addr, args.core_addr);
+    core.start().await;
+
+    signal_task.await?;
+    handle.close();
+
+    core.shutdown().await;
+
     Ok(())
 }

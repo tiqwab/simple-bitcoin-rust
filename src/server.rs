@@ -3,7 +3,7 @@ use clap::Parser;
 use futures::StreamExt;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
-use simple_bitcoin::core::ServerCore;
+use simple_bitcoin::server_core::ServerCore;
 use std::net::SocketAddr;
 
 /// Simple Bitcoin server

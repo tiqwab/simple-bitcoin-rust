@@ -1,4 +1,4 @@
-use crate::connection_manager::ConnectionManager;
+use crate::connection_manager_core::ConnectionManagerCore;
 use anyhow::Context;
 use log::info;
 use std::net::SocketAddr;
@@ -13,7 +13,7 @@ pub enum ServerCoreState {
 pub struct ServerCore {
     state: ServerCoreState,
     core_node_addr: Option<SocketAddr>,
-    cm: ConnectionManager,
+    cm: ConnectionManagerCore,
 }
 
 impl ServerCore {
@@ -22,7 +22,7 @@ impl ServerCore {
         ServerCore {
             state: ServerCoreState::Init,
             core_node_addr,
-            cm: ConnectionManager::new(my_addr),
+            cm: ConnectionManagerCore::new(my_addr),
         }
     }
 
@@ -46,7 +46,7 @@ impl ServerCore {
 
     pub async fn shutdown(&mut self) {
         self.state = ServerCoreState::ShuttingDown;
-        info!("Shutdown ServerCore...");
+        info!("Shutdown ServerCore ...");
         self.cm.connection_close(self.core_node_addr.as_ref()).await;
     }
 

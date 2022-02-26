@@ -61,7 +61,7 @@ impl ConnectionManagerInner {
     }
 }
 
-pub struct ConnectionManager {
+pub struct ConnectionManagerCore {
     addr: SocketAddr,
     inner: Arc<Mutex<ConnectionManagerInner>>,
     check_peers_interval: Duration,
@@ -69,10 +69,10 @@ pub struct ConnectionManager {
     join_handle_for_check_peers: Option<JoinHandle<()>>,
 }
 
-impl ConnectionManager {
-    pub fn new(addr: SocketAddr) -> ConnectionManager {
-        info!("Initializing ConnectionManager...");
-        ConnectionManager {
+impl ConnectionManagerCore {
+    pub fn new(addr: SocketAddr) -> ConnectionManagerCore {
+        info!("Initializing ConnectionManagerCore...");
+        ConnectionManagerCore {
             addr,
             inner: Arc::new(Mutex::new(ConnectionManagerInner::new(addr))),
             check_peers_interval: Duration::from_secs(30),
@@ -233,7 +233,7 @@ impl ConnectionManager {
     // addr に msg を送信する。
     // addr への送信でエラーが発生した場合、その addr を core_node_set から除去する。
     // 送信に成功した場合 true を返す。
-    pub async fn send_msg(
+    async fn send_msg(
         manager: Arc<Mutex<ConnectionManagerInner>>,
         addr: &SocketAddr,
         msg: Message,
