@@ -11,7 +11,7 @@ use tokio::task::JoinHandle;
 
 pub struct ConnectionManagerInner {
     my_addr: SocketAddr,
-    current_core_node: SocketAddr,
+    current_core_node: Option<SocketAddr>,
     core_node_set: HashSet<SocketAddr>,
 }
 
@@ -20,7 +20,7 @@ impl ConnectionManagerInner {
         let node_set = HashSet::<SocketAddr>::new();
         let mut manager = ConnectionManagerInner {
             my_addr,
-            current_core_node: core_node_addr,
+            current_core_node: Some(core_node_addr),
             core_node_set: node_set,
         };
         manager.add_peer(core_node_addr);
@@ -39,14 +39,16 @@ impl ConnectionManagerInner {
         debug!("Removing peer: {}", peer);
         let res = self.core_node_set.remove(peer);
         debug!("Current Core list: {:?}", self.core_node_set);
-        if &self.current_core_node == peer {
-            // TODO: avoid using unwrap
-            let new_core_node = *self.core_node_set.iter().nth(0).unwrap();
-            debug!(
-                "Replace current_core_node({}) with {}",
-                self.current_core_node, new_core_node
-            );
-            self.current_core_node = new_core_node;
+        match &self.current_core_node {
+            Some(current_core_node) if current_core_node == peer => {
+                let new_core_node = self.core_node_set.iter().cloned().nth(0);
+                debug!(
+                    "Replace current_core_node({:?}) with {:?}",
+                    self.current_core_node, new_core_node
+                );
+                self.current_core_node = new_core_node;
+            }
+            _ => {}
         }
         res
     }
@@ -55,7 +57,7 @@ impl ConnectionManagerInner {
         self.my_addr
     }
 
-    pub fn get_current_code_node(&self) -> SocketAddr {
+    pub fn get_current_core_node(&self) -> Option<SocketAddr> {
         self.current_core_node
     }
 }
@@ -125,13 +127,15 @@ impl ConnectionManagerEdge {
         }
 
         let core_node_addr = self.inner.lock().unwrap().current_core_node;
-        let manager_port = self.my_addr.port();
-        Self::send_msg(
-            Arc::clone(&self.inner),
-            &core_node_addr,
-            Message::new(manager_port, Payload::RemoveEdge {}),
-        )
-        .await;
+        if let Some(core_node_addr) = core_node_addr {
+            let manager_port = self.my_addr.port();
+            Self::send_msg(
+                Arc::clone(&self.inner),
+                &core_node_addr,
+                Message::new(manager_port, Payload::RemoveEdge {}),
+            )
+            .await;
+        }
     }
 
     // ユーザが指定した既知の Core ノードへの接続
@@ -141,11 +145,13 @@ impl ConnectionManagerEdge {
 
     async fn connect_to_core(manager: Arc<Mutex<ConnectionManagerInner>>) {
         let core_node_addr = manager.lock().unwrap().current_core_node;
-        info!("Connecting to Core node: {}", core_node_addr);
-        let my_addr = manager.lock().unwrap().my_addr;
-        let payload = Payload::AddAsEdge {};
-        let msg = Message::new(my_addr.port(), payload);
-        Self::send_msg(manager, &core_node_addr, msg).await;
+        if let Some(core_node_addr) = core_node_addr {
+            info!("Connecting to Core node: {}", core_node_addr);
+            let my_addr = manager.lock().unwrap().my_addr;
+            let payload = Payload::AddAsEdge {};
+            let msg = Message::new(my_addr.port(), payload);
+            Self::send_msg(manager, &core_node_addr, msg).await;
+        }
     }
 
     async fn wait_for_access(
@@ -227,18 +233,21 @@ impl ConnectionManagerEdge {
     ) {
         debug!("check_peer_connection was called");
         let manager_addr = manager.lock().unwrap().get_my_addr();
-        let core_node_addr = manager.lock().unwrap().get_current_code_node();
-        let payload = Payload::Ping;
-        let msg = Message::new(manager_addr.port(), payload);
+        let core_node_addr = manager.lock().unwrap().get_current_core_node();
 
-        if !Self::send_msg(Arc::clone(&manager), &core_node_addr, msg).await {
-            // remove disconnected
-            info!(
-                "Couldn't connect to the current code node: {}",
-                core_node_addr
-            );
-            manager.lock().unwrap().remove_peer(&core_node_addr);
-            Self::connect_to_core(Arc::clone(&manager)).await;
+        if let Some(core_node_addr) = core_node_addr {
+            let payload = Payload::Ping;
+            let msg = Message::new(manager_addr.port(), payload);
+
+            if !Self::send_msg(Arc::clone(&manager), &core_node_addr, msg).await {
+                // remove disconnected
+                info!(
+                    "Couldn't connect to the current code node: {}",
+                    core_node_addr
+                );
+                manager.lock().unwrap().remove_peer(&core_node_addr);
+                Self::connect_to_core(Arc::clone(&manager)).await;
+            }
         }
 
         tokio::time::sleep(interval).await;
