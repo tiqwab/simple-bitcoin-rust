@@ -1,4 +1,4 @@
-use crate::message::{Message, Payload};
+use crate::message::{ApplicationPayload, Message, Payload};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use std::collections::HashSet;
@@ -141,6 +141,15 @@ impl ConnectionManagerEdge {
     // ユーザが指定した既知の Core ノードへの接続
     pub async fn join_network(&self) {
         Self::connect_to_core(Arc::clone(&self.inner)).await;
+    }
+
+    // Core ノードへのメッセージ送信
+    pub async fn send_message_to_my_core_node(&self, payload: ApplicationPayload) {
+        let core_node_addr = self.inner.lock().unwrap().current_core_node;
+        if let Some(core_node_addr) = core_node_addr {
+            let msg = Message::new(self.my_addr.port(), Payload::Application { payload });
+            Self::send_msg(Arc::clone(&self.inner), &core_node_addr, msg).await;
+        }
     }
 
     async fn connect_to_core(manager: Arc<Mutex<ConnectionManagerInner>>) {

@@ -39,6 +39,9 @@ async fn main() -> Result<()> {
     let mut core = ClientCore::new(args.listen_addr, args.core_addr);
     core.start().await;
 
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    core.send_message_to_my_core_node().await;
+
     signal_task.await?;
     handle.close();
 

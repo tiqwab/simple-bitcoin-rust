@@ -1,4 +1,5 @@
 use crate::connection_manager_edge::ConnectionManagerEdge;
+use crate::message::ApplicationPayload;
 use log::info;
 use std::net::SocketAddr;
 
@@ -36,5 +37,11 @@ impl ClientCore {
 
     pub fn get_my_current_state(&self) -> &ClientCoreState {
         &self.state
+    }
+
+    pub async fn send_message_to_my_core_node(&self) {
+        let data = "hello".as_bytes().to_owned();
+        let payload = ApplicationPayload::Enhanced { data };
+        self.cm.send_message_to_my_core_node(payload).await;
     }
 }

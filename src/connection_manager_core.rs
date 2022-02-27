@@ -1,4 +1,4 @@
-use crate::message::{Message, Payload};
+use crate::message::{ApplicationPayload, Message, Payload};
 use anyhow::Result;
 use log::{debug, error, info};
 use std::collections::HashSet;
@@ -9,18 +9,33 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 
+// it works as trait alias which is not public API yet
+pub trait ApplicationPayloadHandler:
+    Fn(ApplicationPayload, Option<SocketAddr>) + Send + 'static
+{
+}
+impl<T: Fn(ApplicationPayload, Option<SocketAddr>) + Send + 'static> ApplicationPayloadHandler
+    for T
+{
+}
+
 pub struct ConnectionManagerInner {
     addr: SocketAddr,
+    app_msg_handler: Box<dyn ApplicationPayloadHandler>,
     core_node_set: HashSet<SocketAddr>,
     edge_node_set: HashSet<SocketAddr>,
 }
 
 impl ConnectionManagerInner {
-    pub fn new(addr: SocketAddr) -> ConnectionManagerInner {
+    pub fn new(
+        addr: SocketAddr,
+        app_msg_handler: impl ApplicationPayloadHandler,
+    ) -> ConnectionManagerInner {
         let node_set = HashSet::<SocketAddr>::new();
         let edge_set = HashSet::<SocketAddr>::new();
         let mut manager = ConnectionManagerInner {
             addr: addr.clone(),
+            app_msg_handler: Box::new(app_msg_handler),
             core_node_set: node_set,
             edge_node_set: edge_set,
         };
@@ -56,6 +71,10 @@ impl ConnectionManagerInner {
         res
     }
 
+    pub fn get_my_addr(&self) -> SocketAddr {
+        self.addr
+    }
+
     pub fn get_core_nodes(&self) -> Vec<SocketAddr> {
         self.core_node_set.iter().cloned().collect()
     }
@@ -70,11 +89,17 @@ pub struct ConnectionManagerCore {
 }
 
 impl ConnectionManagerCore {
-    pub fn new(addr: SocketAddr) -> ConnectionManagerCore {
+    pub fn new(
+        addr: SocketAddr,
+        app_msg_handler: impl ApplicationPayloadHandler,
+    ) -> ConnectionManagerCore {
         info!("Initializing ConnectionManagerCore...");
         ConnectionManagerCore {
             addr,
-            inner: Arc::new(Mutex::new(ConnectionManagerInner::new(addr))),
+            inner: Arc::new(Mutex::new(ConnectionManagerInner::new(
+                addr,
+                app_msg_handler,
+            ))),
             check_peers_interval: Duration::from_secs(30),
             join_handle_for_listen: None,
             join_handle_for_check_peers: None,
@@ -225,6 +250,9 @@ impl ConnectionManagerCore {
             Payload::RemoveEdge => {
                 manager.lock().unwrap().remove_edge(&peer_addr);
             }
+            Payload::Application { payload } => {
+                (manager.lock().unwrap().app_msg_handler)(payload, Some(peer_addr));
+            }
         }
 
         Ok(())
@@ -277,7 +305,7 @@ impl ConnectionManagerCore {
         debug!("check_peers_connection was called");
 
         // check peers
-        let manager_addr = manager.lock().unwrap().addr.clone();
+        let manager_addr = manager.lock().unwrap().get_my_addr().clone();
         let target_nodes = manager.lock().unwrap().get_core_nodes();
         let mut failed_nodes = vec![];
         for node in target_nodes.iter() {

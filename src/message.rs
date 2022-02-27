@@ -38,6 +38,23 @@ impl Message {
     }
 }
 
+/// ネットワークで実装されるアプリケーション用のペイロード
+/// ServerCore や ClientCore で処理される
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "msg_type")]
+pub enum ApplicationPayload {
+    #[serde(rename = "0")]
+    NewTransaction,
+    #[serde(rename = "1")]
+    NewBlock,
+    #[serde(rename = "2")]
+    RequestFullChain,
+    #[serde(rename = "3")]
+    FullChain,
+    #[serde(rename = "4")]
+    Enhanced { data: Vec<u8> },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "msg_type")]
 pub enum Payload {
@@ -55,6 +72,8 @@ pub enum Payload {
     AddAsEdge,
     #[serde(rename = "6")]
     RemoveEdge,
+    #[serde(rename = "7")]
+    Application { payload: ApplicationPayload },
 }
 
 #[cfg(test)]
@@ -87,6 +106,46 @@ mod tests {
             12345,
             Payload::CoreList {
                 nodes: vec![SocketAddr::from_str("127.0.0.1:12345").unwrap()],
+            },
+        );
+
+        let actual = serde_json::to_string(&message).unwrap();
+        let actual: Message = serde_json::from_str(&actual[..]).unwrap();
+        assert_eq!(actual, message);
+    }
+
+    #[test]
+    fn test_deserialize_message_application_enhanced() {
+        let raw = r#"{
+          "protocol": "simple_bitcoin_protocol",
+          "version": "0.1.0",
+          "port": 12345,
+          "msg_type": "7",
+          "payload": {
+            "msg_type": "4",
+            "data": [104, 101, 108, 108, 111]
+          }
+        }"#;
+        let expected = Message::new(
+            12345,
+            Payload::Application {
+                payload: ApplicationPayload::Enhanced {
+                    data: "hello".as_bytes().to_owned(),
+                },
+            },
+        );
+        let actual: Message = serde_json::from_str(raw).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_round_trip_message_core_application_enhanced() {
+        let message = Message::new(
+            12345,
+            Payload::Application {
+                payload: ApplicationPayload::Enhanced {
+                    data: "hello".as_bytes().to_owned(),
+                },
             },
         );
 

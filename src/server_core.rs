@@ -1,6 +1,7 @@
 use crate::connection_manager_core::ConnectionManagerCore;
+use crate::message::ApplicationPayload;
 use anyhow::Context;
-use log::info;
+use log::{debug, info};
 use std::net::SocketAddr;
 
 pub enum ServerCoreState {
@@ -16,13 +17,25 @@ pub struct ServerCore {
     cm: ConnectionManagerCore,
 }
 
+// An implementation of ApplicationPayloadHandler
+fn handle_application_payload(payload: ApplicationPayload, _peer: Option<SocketAddr>) {
+    debug!("handle_application_payload: {:?}", payload);
+    match payload {
+        ApplicationPayload::NewTransaction => {}
+        ApplicationPayload::NewBlock => {}
+        ApplicationPayload::RequestFullChain => {}
+        ApplicationPayload::FullChain => {}
+        ApplicationPayload::Enhanced { .. } => {}
+    }
+}
+
 impl ServerCore {
     pub fn new(my_addr: SocketAddr, core_node_addr: Option<SocketAddr>) -> ServerCore {
         info!("Initializing ServerCore...");
         ServerCore {
             state: ServerCoreState::Init,
             core_node_addr,
-            cm: ConnectionManagerCore::new(my_addr),
+            cm: ConnectionManagerCore::new(my_addr, handle_application_payload),
         }
     }
 
