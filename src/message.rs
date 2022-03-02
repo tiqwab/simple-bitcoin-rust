@@ -1,3 +1,4 @@
+use crate::blockchain::transaction::Transaction;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -44,7 +45,7 @@ impl Message {
 #[serde(tag = "msg_type")]
 pub enum ApplicationPayload {
     #[serde(rename = "0")]
-    NewTransaction,
+    NewTransaction { transaction: Transaction },
     #[serde(rename = "1")]
     NewBlock,
     #[serde(rename = "2")]

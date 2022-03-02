@@ -1,6 +1,8 @@
+use crate::blockchain::transaction::Transaction;
 use crate::connection_manager_edge::ConnectionManagerEdge;
 use crate::message::ApplicationPayload;
 use log::info;
+use rand::prelude::*;
 use std::net::SocketAddr;
 
 pub enum ClientCoreState {
@@ -40,8 +42,8 @@ impl ClientCore {
     }
 
     pub async fn send_message_to_my_core_node(&self) {
-        let data = "hello".as_bytes().to_owned();
-        let payload = ApplicationPayload::Enhanced { data };
+        let transaction = Transaction::new("alice", "bob", random());
+        let payload = ApplicationPayload::NewTransaction { transaction };
         self.cm.send_message_to_my_core_node(payload).await;
     }
 }

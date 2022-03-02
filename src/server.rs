@@ -3,8 +3,12 @@ use clap::Parser;
 use futures::StreamExt;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use simple_bitcoin::blockchain::manager::BlockchainManager;
+use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
 use simple_bitcoin::server_core::ServerCore;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// Simple Bitcoin server
 #[derive(Parser, Debug)]
@@ -35,8 +39,17 @@ async fn main() -> Result<()> {
     let handle = signals.handle();
     let signal_task = tokio::spawn(handle_signals(signals));
 
+    let bm = Arc::new(Mutex::new(BlockchainManager::new()));
+    let tp = Arc::new(Mutex::new(TransactionPool::new()));
+
+    tokio::spawn(TransactionPool::generate_block_periodically(
+        Arc::clone(&tp),
+        Arc::clone(&bm),
+        Duration::from_secs(10),
+    ));
+
     let args = Args::parse();
-    let mut core = ServerCore::new(args.listen_addr, args.core_addr);
+    let mut core = ServerCore::new(args.listen_addr, args.core_addr, tp, bm);
     core.start().await;
     core.join_network().await;
 

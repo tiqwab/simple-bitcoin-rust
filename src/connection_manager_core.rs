@@ -11,11 +11,26 @@ use tokio::task::JoinHandle;
 
 // it works as trait alias which is not public API yet
 pub trait ApplicationPayloadHandler:
-    Fn(ApplicationPayload, Option<SocketAddr>) + Send + 'static
+    Fn(
+        ApplicationPayload,
+        Option<SocketAddr>,
+        Vec<SocketAddr>,
+        bool,
+    ) -> Option<(ApplicationPayload, Vec<SocketAddr>)>
+    + Send
+    + 'static
 {
 }
-impl<T: Fn(ApplicationPayload, Option<SocketAddr>) + Send + 'static> ApplicationPayloadHandler
-    for T
+impl<
+        T: Fn(
+                ApplicationPayload,
+                Option<SocketAddr>,
+                Vec<SocketAddr>,
+                bool,
+            ) -> Option<(ApplicationPayload, Vec<SocketAddr>)>
+            + Send
+            + 'static,
+    > ApplicationPayloadHandler for T
 {
 }
 
@@ -212,7 +227,7 @@ impl ConnectionManagerCore {
                     let payload = Payload::CoreList {
                         nodes: nodes.clone(),
                     };
-                    Self::send_msg_to_all_peer(manager, nodes, Message::new(manager_port, payload))
+                    Self::send_msg_to_nodes(manager, nodes, Message::new(manager_port, payload))
                         .await;
                 }
             }
@@ -223,7 +238,7 @@ impl ConnectionManagerCore {
                     let payload = Payload::CoreList {
                         nodes: nodes.clone(),
                     };
-                    Self::send_msg_to_all_peer(manager, nodes, Message::new(manager_port, payload))
+                    Self::send_msg_to_nodes(manager, nodes, Message::new(manager_port, payload))
                         .await;
                 }
             }
@@ -251,7 +266,33 @@ impl ConnectionManagerCore {
                 manager.lock().unwrap().remove_edge(&peer_addr);
             }
             Payload::Application { payload } => {
-                (manager.lock().unwrap().app_msg_handler)(payload, Some(peer_addr));
+                let nodes: Vec<SocketAddr> = manager
+                    .lock()
+                    .unwrap()
+                    .get_core_nodes()
+                    .into_iter()
+                    .filter(|x| x != &manager_addr)
+                    .collect();
+                let is_core = nodes.contains(&peer_addr);
+                let res = (manager.lock().unwrap().app_msg_handler)(
+                    payload,
+                    Some(peer_addr),
+                    nodes,
+                    is_core,
+                );
+                if let Some((new_payload, addrs)) = res {
+                    Self::send_msg_to_nodes(
+                        manager,
+                        addrs,
+                        Message::new(
+                            manager_port,
+                            Payload::Application {
+                                payload: new_payload,
+                            },
+                        ),
+                    )
+                    .await;
+                }
             }
         }
 
@@ -285,7 +326,7 @@ impl ConnectionManagerCore {
     }
 
     // Core ノードリストに登録されているすべてのノードに対して同じメッセージを broadcast する
-    pub async fn send_msg_to_all_peer(
+    async fn send_msg_to_nodes(
         manager: Arc<Mutex<ConnectionManagerInner>>,
         addrs: Vec<SocketAddr>,
         msg: Message,
@@ -331,7 +372,7 @@ impl ConnectionManagerCore {
                 nodes: nodes.clone(),
             };
             let msg = Message::new(manager_addr.port(), payload);
-            Self::send_msg_to_all_peer(Arc::clone(&manager), nodes, msg).await;
+            Self::send_msg_to_nodes(Arc::clone(&manager), nodes, msg).await;
         }
 
         tokio::time::sleep(interval).await;

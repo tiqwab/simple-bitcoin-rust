@@ -28,16 +28,28 @@ impl BlockchainManager {
     // 常に生成される json のキー順が一致するかどうか確認が必要。
     // -> serde_json は どうやら struct で定義した順に出力する。
     // https://users.rust-lang.org/t/order-of-fields-in-serde-json-to-string/48928
-    pub fn get_hash(&self, block: &Block) -> Result<BlockHash> {
+    pub fn calculate_hash(&self, block: &Block) -> Result<BlockHash> {
         let mut hasher = Sha256::new();
         hasher.update(serde_json::to_string(block)?.as_bytes());
         Ok(to_hex(hasher.finalize().to_vec()))
+    }
+
+    pub fn get_last_block_hash(&self) -> BlockHash {
+        if let Some(block) = self.chain.first() {
+            self.calculate_hash(block).unwrap()
+        } else {
+            self.get_genesis_block_hash()
+        }
     }
 
     pub fn get_genesis_block_hash(&self) -> BlockHash {
         let mut hasher = Sha256::new();
         hasher.update(r#"{"message":"this_is_simple_bitcoin_genesis_block"}"#);
         to_hex(hasher.finalize().to_vec())
+    }
+
+    pub fn get_chain(&self) -> Vec<Block> {
+        self.chain.clone()
     }
 
     pub fn add_new_block(&mut self, block: Block) {
@@ -50,7 +62,7 @@ impl BlockchainManager {
             if prev_block_hash != block.get_prev_block_hash() {
                 return Ok(false);
             }
-            prev_block_hash = self.get_hash(block)?;
+            prev_block_hash = self.calculate_hash(block)?;
         }
         Ok(true)
     }

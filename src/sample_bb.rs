@@ -1,24 +1,36 @@
-use simple_bitcoin::blockchain::block::Block;
+use log::info;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
 use simple_bitcoin::blockchain::transaction::Transaction;
+use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-fn main() {
-    let mut bm = BlockchainManager::new();
+#[tokio::main]
+async fn main() {
+    env_logger::init();
 
-    let prev_block_hash = bm.get_genesis_block_hash();
-    println!("genesis_block_hash: {:?}", prev_block_hash);
+    let bm = Arc::new(Mutex::new(BlockchainManager::new()));
+    let tp = Arc::new(Mutex::new(TransactionPool::new()));
 
-    let transaction1 = Transaction::new("test1", "test2", 3);
-    let new_block1 = Block::new(transaction1, prev_block_hash);
-    let new_block_hash1 = bm.get_hash(&new_block1).unwrap();
-    println!("1st block_hash: {:?}", new_block_hash1);
-    bm.add_new_block(new_block1);
+    tokio::spawn(TransactionPool::generate_block_periodically(
+        Arc::clone(&tp),
+        Arc::clone(&bm),
+        Duration::from_secs(10),
+    ));
+
+    let prev_block_hash = bm.lock().unwrap().get_genesis_block_hash();
+    info!("genesis_block_hash: {:?}", prev_block_hash);
+
+    let transaction1 = Transaction::new("test1", "test2", 1);
+    tp.lock().unwrap().add_new_transaction(transaction1);
 
     let transaction2 = Transaction::new("test1", "test3", 2);
-    let new_block2 = Block::new(transaction2, new_block_hash1);
-    let new_block_hash2 = bm.get_hash(&new_block2).unwrap();
-    println!("2nd block_hash: {:?}", new_block_hash2);
-    bm.add_new_block(new_block2);
+    tp.lock().unwrap().add_new_transaction(transaction2);
 
-    println!("{}", bm.is_valid_chain().unwrap())
+    tokio::time::sleep(Duration::from_secs(20)).await;
+
+    let transaction3 = Transaction::new("test1", "test4", 3);
+    tp.lock().unwrap().add_new_transaction(transaction3);
+
+    tokio::time::sleep(Duration::from_secs(60)).await;
 }
