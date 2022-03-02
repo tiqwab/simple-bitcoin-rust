@@ -1,3 +1,4 @@
+pub mod blockchain;
 pub mod client_core;
 mod connection_manager_core;
 mod connection_manager_edge;
