@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 pub trait ApplicationPayloadHandler:
     Fn(
         ApplicationPayload,
-        Option<SocketAddr>,
+        SocketAddr,
         Vec<SocketAddr>,
         bool,
     ) -> Option<(ApplicationPayload, Vec<SocketAddr>)>
@@ -24,7 +24,7 @@ pub trait ApplicationPayloadHandler:
 impl<
         T: Fn(
                 ApplicationPayload,
-                Option<SocketAddr>,
+                SocketAddr,
                 Vec<SocketAddr>,
                 bool,
             ) -> Option<(ApplicationPayload, Vec<SocketAddr>)>
@@ -93,11 +93,19 @@ impl ConnectionManagerInner {
     pub fn get_core_nodes(&self) -> Vec<SocketAddr> {
         self.core_node_set.iter().cloned().collect()
     }
+
+    fn get_core_nodes_without_me(&self) -> Vec<SocketAddr> {
+        self.core_node_set
+            .iter()
+            .cloned()
+            .filter(|x| x != &self.addr)
+            .collect()
+    }
 }
 
 pub struct ConnectionManagerCore {
     addr: SocketAddr,
-    inner: Arc<Mutex<ConnectionManagerInner>>,
+    pub inner: Arc<Mutex<ConnectionManagerInner>>,
     check_peers_interval: Duration,
     join_handle_for_listen: Option<JoinHandle<Result<()>>>,
     join_handle_for_check_peers: Option<JoinHandle<()>>,
@@ -266,20 +274,10 @@ impl ConnectionManagerCore {
                 manager.lock().unwrap().remove_edge(&peer_addr);
             }
             Payload::Application { payload } => {
-                let nodes: Vec<SocketAddr> = manager
-                    .lock()
-                    .unwrap()
-                    .get_core_nodes()
-                    .into_iter()
-                    .filter(|x| x != &manager_addr)
-                    .collect();
+                let nodes: Vec<SocketAddr> = manager.lock().unwrap().get_core_nodes_without_me();
                 let is_core = nodes.contains(&peer_addr);
-                let res = (manager.lock().unwrap().app_msg_handler)(
-                    payload,
-                    Some(peer_addr),
-                    nodes,
-                    is_core,
-                );
+                let res =
+                    (manager.lock().unwrap().app_msg_handler)(payload, peer_addr, nodes, is_core);
                 if let Some((new_payload, addrs)) = res {
                     Self::send_msg_to_nodes(
                         manager,
@@ -325,7 +323,7 @@ impl ConnectionManagerCore {
         Ok(())
     }
 
-    // Core ノードリストに登録されているすべてのノードに対して同じメッセージを broadcast する
+    // 指定されたノードに対して同じメッセージを broadcast する
     async fn send_msg_to_nodes(
         manager: Arc<Mutex<ConnectionManagerInner>>,
         addrs: Vec<SocketAddr>,
@@ -334,6 +332,12 @@ impl ConnectionManagerCore {
         for addr in addrs.iter() {
             Self::send_msg(Arc::clone(&manager), addr, msg.clone()).await;
         }
+    }
+
+    // 登録された Core ノードに全てに対して同じメッセージを broadcast する
+    pub async fn send_msg_to_core_nodes(manager: Arc<Mutex<ConnectionManagerInner>>, msg: Message) {
+        let addrs = manager.lock().unwrap().get_core_nodes_without_me();
+        Self::send_msg_to_nodes(manager, addrs, msg).await;
     }
 
     // 接続されている Core ノードすべての接続状況確認を行う

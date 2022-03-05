@@ -1,3 +1,4 @@
+use crate::blockchain::block::Block;
 use crate::blockchain::transaction::Transaction;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -47,11 +48,11 @@ pub enum ApplicationPayload {
     #[serde(rename = "0")]
     NewTransaction { transaction: Transaction },
     #[serde(rename = "1")]
-    NewBlock,
+    NewBlock { block: Block },
     #[serde(rename = "2")]
     RequestFullChain,
     #[serde(rename = "3")]
-    FullChain,
+    FullChain { chain: Vec<Block> },
     #[serde(rename = "4")]
     Enhanced { data: Vec<u8> },
 }

@@ -3,9 +3,10 @@ use crate::blockchain::transaction_pool::TransactionPool;
 use crate::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
 use crate::message::ApplicationPayload;
 use anyhow::Context;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub enum ServerCoreState {
     Init,
@@ -18,15 +19,17 @@ pub struct ServerCore {
     state: ServerCoreState,
     core_node_addr: Option<SocketAddr>,
     cm: ConnectionManagerCore,
+    bm: Arc<Mutex<BlockchainManager>>,
+    tp: Arc<Mutex<TransactionPool>>,
 }
 
 fn generate_application_payload_handler(
     transaction_pool: Arc<Mutex<TransactionPool>>,
-    _blockchain_manager: Arc<Mutex<BlockchainManager>>,
+    blockchain_manager: Arc<Mutex<BlockchainManager>>,
 ) -> impl ApplicationPayloadHandler {
     // An implementation of ApplicationPayloadHandler
     move |payload: ApplicationPayload,
-          _peer: Option<SocketAddr>,
+          peer: SocketAddr,
           core_nodes: Vec<SocketAddr>,
           is_core: bool| {
         debug!("handle_application_payload: {:?}", payload);
@@ -43,14 +46,48 @@ fn generate_application_payload_handler(
                     None
                 }
             }
-            ApplicationPayload::NewBlock => {
-                unimplemented!()
+            ApplicationPayload::NewBlock { block } => {
+                let mut blockchain_manager = blockchain_manager.lock().unwrap();
+                let mut transaction_pool = transaction_pool.lock().unwrap();
+
+                if let Err(err) = blockchain_manager.is_valid_block(&block) {
+                    warn!("Invalid block: {}", err);
+
+                    let payload = ApplicationPayload::RequestFullChain;
+                    return Some((payload, vec![peer]));
+                }
+
+                blockchain_manager.add_new_block(block);
+                debug!(
+                    "Current blockchain is: {:?}",
+                    blockchain_manager.get_chain()
+                );
+
+                blockchain_manager.remove_useless_transactions(&mut transaction_pool);
+
+                None
             }
             ApplicationPayload::RequestFullChain => {
-                unimplemented!()
+                debug!("Send our latest blockchain for reply to {}", peer);
+                let chain = blockchain_manager.lock().unwrap().get_chain();
+                let payload = ApplicationPayload::FullChain { chain };
+                Some((payload, vec![peer]))
             }
-            ApplicationPayload::FullChain => {
-                unimplemented!()
+            ApplicationPayload::FullChain { chain } => {
+                if !is_core {
+                    warn!("Blockchain received from unknown");
+                    return None;
+                }
+
+                let mut blockchain_manager = blockchain_manager.lock().unwrap();
+                let mut transaction_pool = transaction_pool.lock().unwrap();
+
+                let orphan_transactions = blockchain_manager.resolve_conflicts(chain);
+                for transaction in orphan_transactions {
+                    transaction_pool.add_new_transaction(transaction);
+                }
+
+                None
             }
             ApplicationPayload::Enhanced { .. } => {
                 unimplemented!()
@@ -72,14 +109,23 @@ impl ServerCore {
             core_node_addr,
             cm: ConnectionManagerCore::new(
                 my_addr,
-                generate_application_payload_handler(pool, manager),
+                generate_application_payload_handler(Arc::clone(&pool), Arc::clone(&manager)),
             ),
+            bm: manager,
+            tp: pool,
         }
     }
 
     pub async fn start(&mut self) {
         self.state = ServerCoreState::Standby;
         self.cm.start().await;
+
+        tokio::spawn(TransactionPool::generate_block_periodically(
+            Arc::clone(&self.tp),
+            Arc::clone(&self.bm),
+            Arc::clone(&self.cm.inner),
+            Duration::from_secs(10),
+        ));
     }
 
     pub async fn join_network(&mut self) {
