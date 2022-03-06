@@ -1,19 +1,19 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::StreamExt;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use simple_bitcoin::client_core::ClientCore;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 
 /// Simple Bitcoin client
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long)]
-    listen_addr: SocketAddr,
+    listen_addr: String,
     #[clap(short, long)]
-    core_addr: SocketAddr,
+    core_addr: String,
 }
 
 async fn handle_signals(mut signals: Signals) {
@@ -27,6 +27,12 @@ async fn handle_signals(mut signals: Signals) {
     }
 }
 
+fn convert_to_addr(s: String) -> Result<SocketAddr> {
+    s.to_socket_addrs()?
+        .find(|x| x.is_ipv4())
+        .ok_or(anyhow!("Illegal address: {}", s))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -36,7 +42,10 @@ async fn main() -> Result<()> {
     let signal_task = tokio::spawn(handle_signals(signals));
 
     let args = Args::parse();
-    let mut core = ClientCore::new(args.listen_addr, args.core_addr);
+    let listen_addr = convert_to_addr(args.listen_addr)?;
+    let core_addr = convert_to_addr(args.core_addr)?;
+
+    let mut core = ClientCore::new(listen_addr, core_addr);
     core.start().await;
 
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;

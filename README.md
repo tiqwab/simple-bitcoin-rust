@@ -1,17 +1,12 @@
 ### Build
 
 ```
-$ cargo build
+$ sudo docker image build -t simple-bitcoin/server:latest -f Dockerfile.server .
+$ sudo docker image build -t simple-bitcoin/client:latest -f Dockerfile.client .
 ```
 
 ### Run
 
 ```
-$ ./target/debug/server -l 127.0.0.1:20011
-```
-
-On another console:
-
-```
-$ ./target/debug/server -l 127.0.0.1:20012 -c 127.0.0.1:20011
+$ docker-compose up -d
 ```

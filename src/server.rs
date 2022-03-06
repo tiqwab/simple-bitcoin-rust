@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::StreamExt;
 use signal_hook::consts::signal::*;
@@ -6,7 +6,7 @@ use signal_hook_tokio::Signals;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
 use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
 use simple_bitcoin::server_core::ServerCore;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 
 /// Simple Bitcoin server
@@ -14,9 +14,9 @@ use std::sync::{Arc, Mutex};
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long)]
-    listen_addr: SocketAddr,
+    listen_addr: String,
     #[clap(short, long)]
-    core_addr: Option<SocketAddr>,
+    core_addr: Option<String>,
 }
 
 async fn handle_signals(mut signals: Signals) {
@@ -28,6 +28,12 @@ async fn handle_signals(mut signals: Signals) {
             _ => unreachable!(),
         }
     }
+}
+
+fn convert_to_addr(s: String) -> Result<SocketAddr> {
+    s.to_socket_addrs()?
+        .find(|x| x.is_ipv4())
+        .ok_or(anyhow!("Illegal address: {}", s))
 }
 
 #[tokio::main]
@@ -42,7 +48,10 @@ async fn main() -> Result<()> {
     let tp = Arc::new(Mutex::new(TransactionPool::new()));
 
     let args = Args::parse();
-    let mut core = ServerCore::new(args.listen_addr, args.core_addr, tp, bm);
+    let listen_addr = convert_to_addr(args.listen_addr)?;
+    let core_addr = args.core_addr.map(|x| convert_to_addr(x).unwrap());
+
+    let mut core = ServerCore::new(listen_addr, core_addr, tp, bm);
     core.start().await;
     core.join_network().await;
 
