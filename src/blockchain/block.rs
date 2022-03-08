@@ -1,4 +1,4 @@
-use crate::blockchain::transaction::Transaction;
+use crate::blockchain::transaction::{NormalTransaction, Transaction, Transactions};
 use crate::blockchain::util;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -9,12 +9,12 @@ pub type BlockHash = String;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockWithoutProof {
     timestamp: DateTime<Utc>,
-    transaction: Vec<Transaction>,
+    transaction: Transactions,
     prev_block_hash: BlockHash,
 }
 
 impl BlockWithoutProof {
-    pub fn new(transaction: Vec<Transaction>, prev_block_hash: BlockHash) -> BlockWithoutProof {
+    pub fn new(transaction: Transactions, prev_block_hash: BlockHash) -> BlockWithoutProof {
         BlockWithoutProof {
             timestamp: Utc::now(),
             transaction,
@@ -57,8 +57,8 @@ impl Block {
         Block { inner, nonce }
     }
 
-    pub fn get_transactions(&self) -> &Vec<Transaction> {
-        &self.inner.transaction
+    pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
+        self.inner.transaction.get_normal_transactions()
     }
 
     pub fn get_prev_block_hash(&self) -> BlockHash {
@@ -82,15 +82,19 @@ impl Block {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blockchain::transaction::CoinbaseTransaction;
 
     #[tokio::test]
     async fn test_block_mine() {
         let block_without_proof = BlockWithoutProof::new(
-            vec![Transaction::new("sender1", "recipient1", 2)],
+            Transactions::new(
+                CoinbaseTransaction::new("recipient1".to_string(), 2),
+                vec![],
+            ),
             util::sha256("foo".as_bytes(), "123".as_bytes()),
         );
 
-        let block = block_without_proof.mine(4).await.unwrap();
+        let block = block_without_proof.mine(4).unwrap();
         assert!(block.calculate_hash().unwrap().ends_with("0000"));
     }
 }

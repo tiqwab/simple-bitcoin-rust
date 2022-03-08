@@ -1,6 +1,6 @@
 use crate::blockchain::block::BlockWithoutProof;
 use crate::blockchain::manager::BlockchainManager;
-use crate::blockchain::transaction::Transaction;
+use crate::blockchain::transaction::{CoinbaseTransaction, NormalTransaction, Transactions};
 use crate::connection_manager_core::{ConnectionManagerCore, ConnectionManagerInner};
 use crate::message::{ApplicationPayload, Message, Payload};
 use log::{debug, info};
@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub struct TransactionPool {
-    transactions: Vec<Transaction>,
+    transactions: Vec<NormalTransaction>,
 }
 
 impl TransactionPool {
@@ -19,13 +19,13 @@ impl TransactionPool {
         }
     }
 
-    pub fn add_new_transaction(&mut self, transaction: Transaction) {
+    pub fn add_new_transaction(&mut self, transaction: NormalTransaction) {
         if !self.has_transaction(&transaction) {
             self.transactions.push(transaction);
         }
     }
 
-    pub fn has_transaction(&self, transaction: &Transaction) -> bool {
+    pub fn has_transaction(&self, transaction: &NormalTransaction) -> bool {
         self.transactions.contains(transaction)
     }
 
@@ -33,11 +33,11 @@ impl TransactionPool {
         self.transactions.clear();
     }
 
-    pub fn get_transactions(&self) -> Vec<Transaction> {
+    pub fn get_transactions(&self) -> Vec<NormalTransaction> {
         self.transactions.clone()
     }
 
-    pub fn take_transactions(&mut self) -> Vec<Transaction> {
+    pub fn take_transactions(&mut self) -> Vec<NormalTransaction> {
         self.transactions.drain(0..).collect()
     }
 
@@ -45,7 +45,7 @@ impl TransactionPool {
         self.transactions.drain(range);
     }
 
-    pub fn remove_transaction(&mut self, transaction: &Transaction) {
+    pub fn remove_transaction(&mut self, transaction: &NormalTransaction) {
         if let Some((index, _)) = self
             .transactions
             .iter()
@@ -65,14 +65,17 @@ impl TransactionPool {
     ) {
         debug!("generate_block_periodically was called");
 
-        let transactions = pool.lock().unwrap().get_transactions();
-        let num_transactions = transactions.len();
+        let pool_txs = pool.lock().unwrap().get_transactions();
+        let num_pool_txs = pool_txs.len();
 
         let difficulty = blockchain_manager.lock().unwrap().get_difficulty();
 
-        if !transactions.is_empty() {
+        if !pool_txs.is_empty() {
             let prev_block_hash = blockchain_manager.lock().unwrap().get_last_block_hash();
             let block = tokio::task::spawn_blocking(move || {
+                // FIXME: create coinbase
+                let transactions =
+                    Transactions::new(CoinbaseTransaction::new("myaddr".to_string(), 10), pool_txs);
                 BlockWithoutProof::new(transactions, prev_block_hash.clone()).mine(difficulty)
             })
             .await
@@ -92,7 +95,7 @@ impl TransactionPool {
                     manager.add_new_block(block.clone());
                     debug!("generated block: {:?}", block);
                     debug!("Current blockchain is: {:?}", manager.get_chain());
-                    pool.remove_transactions(0..num_transactions);
+                    pool.remove_transactions(0..num_pool_txs);
                 }
             }
 

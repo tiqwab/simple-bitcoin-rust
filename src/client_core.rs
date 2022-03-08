@@ -42,8 +42,9 @@ impl ClientCore {
     }
 
     pub async fn send_message_to_my_core_node(&self) {
-        let transaction = Transaction::new("alice", "bob", random());
-        let payload = ApplicationPayload::NewTransaction { transaction };
-        self.cm.send_message_to_my_core_node(payload).await;
+        // TODO: remove later
+        // let transaction = Transaction::new("alice", "bob", random());
+        // let payload = ApplicationPayload::NewTransaction { transaction };
+        // self.cm.send_message_to_my_core_node(payload).await;
     }
 }
