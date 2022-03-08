@@ -1,6 +1,4 @@
-import {ComponentClass} from "react";
 import {Container as BContainer, Nav as BNav, Navbar as BNavbar} from "react-bootstrap";
-import {NavLinkProps} from "react-router-dom";
 import NavbarMenu from './NavbarMenu';
 import NavbarSettings from './NavbarSettings';
 import NavbarAdvance from './NavbarAdvance';
