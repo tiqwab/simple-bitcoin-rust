@@ -1,6 +1,8 @@
+use actix_web::{web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::StreamExt;
+use log::info;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use simple_bitcoin::client_core::ClientCore;
@@ -33,6 +35,10 @@ fn convert_to_addr(s: String) -> Result<SocketAddr> {
         .ok_or(anyhow!("Illegal address: {}", s))
 }
 
+async fn hello() -> &'static str {
+    "hello"
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -48,10 +54,16 @@ async fn main() -> Result<()> {
     let mut core = ClientCore::new(listen_addr, core_addr);
     core.start().await;
 
+    HttpServer::new(|| App::new().route("/hello", web::get().to(hello)))
+        .bind(("127.0.0.1", 12345))?
+        .run()
+        .await?;
+
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     core.send_message_to_my_core_node().await;
 
     signal_task.await?;
+    info!("Stop client");
     handle.close();
 
     core.shutdown().await;
