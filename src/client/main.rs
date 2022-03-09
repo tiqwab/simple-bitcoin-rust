@@ -1,12 +1,14 @@
 use actix_web::{web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use client_core::ClientCore;
 use futures::StreamExt;
 use log::info;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
-use simple_bitcoin::client_core::ClientCore;
 use std::net::{SocketAddr, ToSocketAddrs};
+
+pub mod client_core;
 
 /// Simple Bitcoin client
 #[derive(Parser, Debug)]

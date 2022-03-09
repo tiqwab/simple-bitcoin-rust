@@ -1,13 +1,15 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::StreamExt;
+use server_core::ServerCore;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
 use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
-use simple_bitcoin::server_core::ServerCore;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
+
+pub mod server_core;
 
 /// Simple Bitcoin server
 #[derive(Parser, Debug)]

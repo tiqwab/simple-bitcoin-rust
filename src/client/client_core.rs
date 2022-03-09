@@ -1,8 +1,6 @@
-use crate::blockchain::transaction::Transaction;
-use crate::connection_manager_edge::ConnectionManagerEdge;
-use crate::message::ApplicationPayload;
 use log::info;
 use rand::prelude::*;
+use simple_bitcoin::connection_manager_edge::ConnectionManagerEdge;
 use std::net::SocketAddr;
 
 pub enum ClientCoreState {

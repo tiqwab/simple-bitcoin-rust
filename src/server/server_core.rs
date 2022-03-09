@@ -1,9 +1,9 @@
-use crate::blockchain::manager::BlockchainManager;
-use crate::blockchain::transaction_pool::TransactionPool;
-use crate::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
-use crate::message::ApplicationPayload;
 use anyhow::Context;
 use log::{debug, info, warn};
+use simple_bitcoin::blockchain::manager::BlockchainManager;
+use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
+use simple_bitcoin::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
+use simple_bitcoin::message::ApplicationPayload;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
