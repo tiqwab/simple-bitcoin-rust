@@ -1,17 +1,40 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-type TransactionHash = String;
-type Address = String;
+pub type Address = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionInput {
-    transaction: TransactionHash,
+    transaction: Transaction,
     index: usize,
 }
 
 impl TransactionInput {
-    pub fn new(transaction: TransactionHash, index: usize) -> TransactionInput {
+    pub fn new(transaction: Transaction, index: usize) -> TransactionInput {
         TransactionInput { transaction, index }
+    }
+
+    pub fn get_transaction(&self) -> &Transaction {
+        &self.transaction
+    }
+
+    pub fn get_recipient(&self) -> Address {
+        self.transaction
+            .get_outputs()
+            .iter()
+            .nth(self.index)
+            .unwrap()
+            .recipient
+            .clone()
+    }
+
+    pub fn get_value(&self) -> u64 {
+        self.transaction
+            .get_outputs()
+            .iter()
+            .nth(self.index)
+            .unwrap()
+            .value
     }
 }
 
@@ -25,6 +48,14 @@ impl TransactionOutput {
     pub fn new(recipient: Address, value: u64) -> TransactionOutput {
         TransactionOutput { recipient, value }
     }
+
+    pub fn get_recipient(&self) -> Address {
+        self.recipient.clone()
+    }
+
+    pub fn get_value(&self) -> u64 {
+        self.value
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -36,15 +67,55 @@ pub enum Transaction {
     Normal(NormalTransaction),
 }
 
+impl Transaction {
+    pub fn get_input(&self, idx: usize) -> Option<TransactionInput> {
+        match self {
+            Transaction::Coinbase(_) => None,
+            Transaction::Normal(tx) => tx.inputs.iter().nth(idx).cloned(),
+        }
+    }
+
+    pub fn get_inputs(&self) -> Vec<TransactionInput> {
+        match self {
+            Transaction::Coinbase(_) => vec![],
+            Transaction::Normal(tx) => tx.inputs.clone(),
+        }
+    }
+
+    pub fn get_output(&self, idx: usize) -> Option<TransactionOutput> {
+        match self {
+            Transaction::Coinbase(tx) if idx == 0 => {
+                Some(TransactionOutput::new(tx.recipient.clone(), tx.value))
+            }
+            Transaction::Normal(tx) => tx.outputs.iter().nth(idx).cloned(),
+            _ => None,
+        }
+    }
+
+    pub fn get_outputs(&self) -> Vec<TransactionOutput> {
+        match self {
+            Transaction::Coinbase(tx) => {
+                vec![TransactionOutput::new(tx.recipient.clone(), tx.value)]
+            }
+            Transaction::Normal(tx) => tx.outputs.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CoinbaseTransaction {
     recipient: Address,
     value: u64,
+    timestamp: DateTime<Utc>,
 }
 
 impl CoinbaseTransaction {
-    pub fn new(recipient: Address, value: u64) -> CoinbaseTransaction {
-        CoinbaseTransaction { recipient, value }
+    pub fn new(recipient: Address, value: u64, timestamp: DateTime<Utc>) -> CoinbaseTransaction {
+        CoinbaseTransaction {
+            recipient,
+            value,
+            timestamp,
+        }
     }
 }
 
@@ -52,14 +123,20 @@ impl CoinbaseTransaction {
 pub struct NormalTransaction {
     inputs: Vec<TransactionInput>,
     outputs: Vec<TransactionOutput>,
+    timestamp: DateTime<Utc>,
 }
 
 impl NormalTransaction {
     pub fn new(
         inputs: Vec<TransactionInput>,
         outputs: Vec<TransactionOutput>,
+        timestamp: DateTime<Utc>,
     ) -> NormalTransaction {
-        NormalTransaction { inputs, outputs }
+        NormalTransaction {
+            inputs,
+            outputs,
+            timestamp,
+        }
     }
 }
 
@@ -93,21 +170,30 @@ impl Transactions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_deserialize_transactions() {
+        let now: DateTime<Utc> = DateTime::from_str("2022-03-09T12:00:00Z").unwrap();
+
         let json = r#"
             [
               {
                 "tx_type": "0",
                 "recipient": "alice",
-                "value": 10
+                "value": 10,
+                "timestamp": "2022-03-09T12:00:00Z"
               },
               {
                 "tx_type": "1",
                 "inputs": [
                   {
-                    "transaction": "alice",
+                    "transaction": {
+                      "tx_type": "0",
+                      "recipient": "alice",
+                      "value": 10,
+                      "timestamp": "2022-03-09T12:00:00Z"
+                    },
                     "index": 0
                   }
                 ],
@@ -116,7 +202,8 @@ mod tests {
                     "recipient": "bob",
                     "value": 10
                   }
-                ]
+                ],
+                "timestamp": "2022-03-09T12:00:00Z"
               }
             ]
         "#;
@@ -125,10 +212,14 @@ mod tests {
             serde_json::from_str(json).expect("failed to parse transactions");
 
         let expected = Transactions::new(
-            CoinbaseTransaction::new("alice".to_string(), 10),
+            CoinbaseTransaction::new("alice".to_string(), 10, now),
             vec![NormalTransaction::new(
-                vec![TransactionInput::new("alice".to_string(), 0)],
+                vec![TransactionInput::new(
+                    Transaction::Coinbase(CoinbaseTransaction::new("alice".to_string(), 10, now)),
+                    0,
+                )],
                 vec![TransactionOutput::new("bob".to_string(), 10)],
+                now,
             )],
         );
 
@@ -137,11 +228,17 @@ mod tests {
 
     #[test]
     fn test_round_trip_transactions() {
+        let now: DateTime<Utc> = DateTime::from_str("2022-03-09T12:00:00Z").unwrap();
+
         let txs = Transactions::new(
-            CoinbaseTransaction::new("alice".to_string(), 10),
+            CoinbaseTransaction::new("alice".to_string(), 10, Utc::now()),
             vec![NormalTransaction::new(
-                vec![TransactionInput::new("alice".to_string(), 0)],
+                vec![TransactionInput::new(
+                    Transaction::Coinbase(CoinbaseTransaction::new("alice".to_string(), 10, now)),
+                    0,
+                )],
                 vec![TransactionOutput::new("bob".to_string(), 10)],
+                Utc::now(),
             )],
         );
 

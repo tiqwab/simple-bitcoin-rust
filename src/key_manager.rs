@@ -1,3 +1,5 @@
+use crate::blockchain::transaction::Address;
+use crate::util;
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rsa::pkcs1::ToRsaPublicKey;
@@ -5,15 +7,14 @@ use rsa::pkcs8::ToPrivateKey;
 use rsa::{Hash, PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 
-struct KeyManager {
+pub struct KeyManager {
     private_key: RsaPrivateKey,
     public_key: RsaPublicKey,
     rng: OsRng,
 }
 
 impl KeyManager {
-    pub fn new() -> Result<KeyManager> {
-        let mut rng = OsRng;
+    pub fn new(mut rng: OsRng) -> Result<KeyManager> {
         let bits = 2048;
         let private_key = RsaPrivateKey::new(&mut rng, bits)?;
         let public_key = RsaPublicKey::from(&private_key);
@@ -56,5 +57,9 @@ impl KeyManager {
         };
         self.public_key.verify(padding, hashed, signature)?;
         Ok(())
+    }
+
+    pub fn get_address(&self) -> Address {
+        util::to_hex(self.public_key.to_pkcs1_der().unwrap().as_der())
     }
 }

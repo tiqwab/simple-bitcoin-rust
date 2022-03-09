@@ -1,5 +1,5 @@
 use crate::blockchain::transaction::{NormalTransaction, Transaction, Transactions};
-use crate::blockchain::util;
+use crate::util;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ mod tests {
     async fn test_block_mine() {
         let block_without_proof = BlockWithoutProof::new(
             Transactions::new(
-                CoinbaseTransaction::new("recipient1".to_string(), 2),
+                CoinbaseTransaction::new("recipient1".to_string(), 2, Utc::now()),
                 vec![],
             ),
             util::sha256("foo".as_bytes(), "123".as_bytes()),

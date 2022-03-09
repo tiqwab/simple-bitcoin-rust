@@ -1,7 +1,7 @@
 use crate::blockchain::block::{Block, BlockHash};
 use crate::blockchain::transaction::NormalTransaction;
 use crate::blockchain::transaction_pool::TransactionPool;
-use crate::blockchain::util;
+use crate::util;
 use anyhow::{anyhow, Result};
 use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
@@ -30,7 +30,7 @@ impl BlockchainManager {
     pub fn get_genesis_block_hash(&self) -> BlockHash {
         let mut hasher = Sha256::new();
         hasher.update(r#"{"message":"this_is_simple_bitcoin_genesis_block"}"#);
-        util::to_hex(hasher.finalize().to_vec())
+        util::to_hex(&hasher.finalize().to_vec())
     }
 
     pub fn get_chain(&self) -> Vec<Block> {
@@ -149,13 +149,14 @@ mod tests {
     use crate::blockchain::transaction::{
         CoinbaseTransaction, Transaction, TransactionInput, TransactionOutput, Transactions,
     };
+    use chrono::Utc;
 
     fn generate_block(
         transactions: Vec<NormalTransaction>,
         prev_block_hash: BlockHash,
         difficulty: usize,
     ) -> Block {
-        let coinbase = CoinbaseTransaction::new("recipient1".to_string(), 10);
+        let coinbase = CoinbaseTransaction::new("recipient1".to_string(), 10, Utc::now());
         BlockWithoutProof::new(Transactions::new(coinbase, transactions), prev_block_hash)
             .mine(difficulty)
             .unwrap()
@@ -167,13 +168,24 @@ mod tests {
         let mut pool = TransactionPool::new();
         let mut manager = BlockchainManager::new(2);
 
+        let base = Transaction::Coinbase(CoinbaseTransaction::new(
+            "alice".to_string(),
+            10,
+            Utc::now(),
+        ));
+
         let trans1 = NormalTransaction::new(
-            vec![TransactionInput::new("tx0".to_string(), 0)],
+            vec![TransactionInput::new(base, 0)],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
         let trans2 = NormalTransaction::new(
-            vec![TransactionInput::new("tx1".to_string(), 0)],
+            vec![TransactionInput::new(
+                Transaction::Normal(trans1.clone()),
+                0,
+            )],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let block = generate_block(
@@ -198,19 +210,34 @@ mod tests {
         // setup
         let mut manager = BlockchainManager::new(2);
 
+        let base = Transaction::Coinbase(CoinbaseTransaction::new(
+            "alice".to_string(),
+            10,
+            Utc::now(),
+        ));
+
         let trans1 = NormalTransaction::new(
-            vec![TransactionInput::new("tx0".to_string(), 0)],
+            vec![TransactionInput::new(base, 0)],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let trans2 = NormalTransaction::new(
-            vec![TransactionInput::new("tx1".to_string(), 0)],
+            vec![TransactionInput::new(
+                Transaction::Normal(trans1.clone()),
+                0,
+            )],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let trans3 = NormalTransaction::new(
-            vec![TransactionInput::new("tx2".to_string(), 0)],
+            vec![TransactionInput::new(
+                Transaction::Normal(trans2.clone()),
+                0,
+            )],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         // manager contains only block1 and block2
@@ -254,19 +281,34 @@ mod tests {
         // setup
         let mut manager = BlockchainManager::new(2);
 
+        let base = Transaction::Coinbase(CoinbaseTransaction::new(
+            "alice".to_string(),
+            10,
+            Utc::now(),
+        ));
+
         let trans1 = NormalTransaction::new(
-            vec![TransactionInput::new("tx0".to_string(), 0)],
+            vec![TransactionInput::new(base, 0)],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let trans2 = NormalTransaction::new(
-            vec![TransactionInput::new("tx1".to_string(), 0)],
+            vec![TransactionInput::new(
+                Transaction::Normal(trans1.clone()),
+                0,
+            )],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let trans3 = NormalTransaction::new(
-            vec![TransactionInput::new("tx2".to_string(), 0)],
+            vec![TransactionInput::new(
+                Transaction::Normal(trans2.clone()),
+                0,
+            )],
             vec![TransactionOutput::new("recipient1".to_string(), 1)],
+            Utc::now(),
         );
 
         let block1 = generate_block(

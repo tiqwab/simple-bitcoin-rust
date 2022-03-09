@@ -3,6 +3,7 @@ use crate::blockchain::manager::BlockchainManager;
 use crate::blockchain::transaction::{CoinbaseTransaction, NormalTransaction, Transactions};
 use crate::connection_manager_core::{ConnectionManagerCore, ConnectionManagerInner};
 use crate::message::{ApplicationPayload, Message, Payload};
+use chrono::Utc;
 use log::{debug, info};
 use std::ops::RangeBounds;
 use std::sync::{Arc, Mutex};
@@ -74,8 +75,10 @@ impl TransactionPool {
             let prev_block_hash = blockchain_manager.lock().unwrap().get_last_block_hash();
             let block = tokio::task::spawn_blocking(move || {
                 // FIXME: create coinbase
-                let transactions =
-                    Transactions::new(CoinbaseTransaction::new("myaddr".to_string(), 10), pool_txs);
+                let transactions = Transactions::new(
+                    CoinbaseTransaction::new("myaddr".to_string(), 10, Utc::now()),
+                    pool_txs,
+                );
                 BlockWithoutProof::new(transactions, prev_block_hash.clone()).mine(difficulty)
             })
             .await
