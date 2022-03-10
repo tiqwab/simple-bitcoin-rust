@@ -1,5 +1,6 @@
 import {Button as BButton, Container as BContainer, Form as BForm} from "react-bootstrap";
 import React from "react";
+import axios, {AxiosResponse} from "axios";
 
 function Home() {
     return (
@@ -10,12 +11,49 @@ function Home() {
     )
 }
 
+interface GetBalanceResponse {
+    balance: number,
+}
+
+interface BalanceState {
+    data: GetBalanceResponse | null,
+    error: any,
+    isLoading: boolean,
+}
+
 function CurrentBalance() {
-    const [balance, setBalance] = React.useState(0);
+    const [result, setResult] = React.useState<BalanceState>({ data: null, error: null, isLoading: true });
+
+    const fetcher = (apiPath: string) => {
+        const url = `http://localhost:12345${apiPath}`;
+        axios.get(url).then((resp: AxiosResponse<GetBalanceResponse>) => {
+            setResult((cur) => ({
+                ...cur,
+                data: resp.data,
+                isLoading: false,
+            }))
+        }).catch((err) => {
+            setResult((cur) => ({
+                ...cur,
+                error: err,
+                isLoading: false,
+            }))
+        });
+    };
+
+    React.useEffect(() => {
+        setResult(() => ({
+            data: null,
+            error: null,
+            isLoading: true,
+        }))
+
+        fetcher("/balance");
+    }, []);
 
     return (
         <div className="mt-3 mb-3">
-            Current Balance: { balance }
+            Current Balance: { result.data !== null ? result.data.balance : 0 }
         </div>
     )
 }

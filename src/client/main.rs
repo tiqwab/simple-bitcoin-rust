@@ -1,4 +1,5 @@
-use actix_web::{web, App, HttpServer};
+use actix_cors::Cors;
+use actix_web::{http, web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use client_core::ClientCore;
@@ -70,10 +71,18 @@ async fn main() -> Result<()> {
         key_manager,
         utxo_manager,
     ));
-    HttpServer::new(move || App::new().configure(api::config).app_data(app_data.clone()))
-        .bind((api_addr.ip().to_string(), api_addr.port()))?
-        .run()
-        .await?;
+    HttpServer::new(move || {
+        // loose condition just for development
+        let cors = Cors::permissive();
+
+        App::new()
+            .configure(api::config)
+            .app_data(app_data.clone())
+            .wrap(cors)
+    })
+    .bind((api_addr.ip().to_string(), api_addr.port()))?
+    .run()
+    .await?;
 
     signal_task.await?;
     info!("Stop client");
