@@ -4,10 +4,15 @@ use clap::Parser;
 use client_core::ClientCore;
 use futures::StreamExt;
 use log::info;
+use rand::rngs::OsRng;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use simple_bitcoin::blockchain::utxo::UTXOManager;
+use simple_bitcoin::key_manager::KeyManager;
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::sync::{Arc, Mutex};
 
+mod api;
 pub mod client_core;
 
 /// Simple Bitcoin client
@@ -18,6 +23,8 @@ struct Args {
     listen_addr: String,
     #[clap(short, long)]
     core_addr: String,
+    #[clap(short, long)]
+    api_addr: String,
 }
 
 async fn handle_signals(mut signals: Signals) {
@@ -37,10 +44,6 @@ fn convert_to_addr(s: String) -> Result<SocketAddr> {
         .ok_or(anyhow!("Illegal address: {}", s))
 }
 
-async fn hello() -> &'static str {
-    "hello"
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -52,23 +55,31 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let listen_addr = convert_to_addr(args.listen_addr)?;
     let core_addr = convert_to_addr(args.core_addr)?;
+    let api_addr = convert_to_addr(args.api_addr)?;
 
-    let mut core = ClientCore::new(listen_addr, core_addr);
-    core.start().await;
+    let core = Arc::new(Mutex::new(ClientCore::new(listen_addr, core_addr)));
+    core.lock().unwrap().start().await;
 
-    HttpServer::new(|| App::new().route("/hello", web::get().to(hello)))
-        .bind(("127.0.0.1", 12345))?
+    let rng = OsRng;
+    let key_manager = Mutex::new(KeyManager::new(rng.clone()).unwrap());
+    let utxo_manager = Mutex::new(UTXOManager::new(key_manager.lock().unwrap().get_address()));
+
+    info!("api binds at {}", api_addr);
+    let app_data = web::Data::new(api::AppState::new(
+        Arc::clone(&core),
+        key_manager,
+        utxo_manager,
+    ));
+    HttpServer::new(move || App::new().configure(api::config).app_data(app_data.clone()))
+        .bind((api_addr.ip().to_string(), api_addr.port()))?
         .run()
         .await?;
-
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    core.send_message_to_my_core_node().await;
 
     signal_task.await?;
     info!("Stop client");
     handle.close();
 
-    core.shutdown().await;
+    core.lock().unwrap().shutdown().await;
 
     Ok(())
 }

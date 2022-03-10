@@ -3,6 +3,7 @@ use rand::prelude::*;
 use simple_bitcoin::connection_manager_edge::ConnectionManagerEdge;
 use std::net::SocketAddr;
 
+#[derive(Debug)]
 pub enum ClientCoreState {
     Init,
     Active,
@@ -37,12 +38,5 @@ impl ClientCore {
 
     pub fn get_my_current_state(&self) -> &ClientCoreState {
         &self.state
-    }
-
-    pub async fn send_message_to_my_core_node(&self) {
-        // TODO: remove later
-        // let transaction = Transaction::new("alice", "bob", random());
-        // let payload = ApplicationPayload::NewTransaction { transaction };
-        // self.cm.send_message_to_my_core_node(payload).await;
     }
 }
