@@ -1,6 +1,7 @@
 use log::info;
 use rand::prelude::*;
 use simple_bitcoin::connection_manager_edge::ConnectionManagerEdge;
+use simple_bitcoin::message::ApplicationPayload;
 use std::net::SocketAddr;
 
 #[derive(Debug)]
@@ -38,5 +39,9 @@ impl ClientCore {
 
     pub fn get_my_current_state(&self) -> &ClientCoreState {
         &self.state
+    }
+
+    pub async fn send_msg_to_core(&self, payload: ApplicationPayload) {
+        self.cm.send_message_to_my_core_node(payload).await;
     }
 }

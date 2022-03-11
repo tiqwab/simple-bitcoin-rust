@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use client_core::ClientCore;
 use futures::StreamExt;
-use log::info;
+use log::{debug, info};
 use rand::rngs::OsRng;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
 
     let rng = OsRng;
     let key_manager = Mutex::new(KeyManager::new(rng.clone()).unwrap());
+    debug!("my address: {}", key_manager.lock().unwrap().get_address());
     let utxo_manager = Mutex::new(UTXOManager::new(key_manager.lock().unwrap().get_address()));
 
     info!("api binds at {}", api_addr);

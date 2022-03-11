@@ -1,8 +1,9 @@
 use crate::ClientCore;
-use actix_web::{get, web, App, HttpServer, Responder};
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use simple_bitcoin::blockchain::utxo::UTXOManager;
 use simple_bitcoin::key_manager::KeyManager;
+use simple_bitcoin::message::ApplicationPayload;
 use std::sync::{Arc, Mutex};
 
 pub struct AppState {
@@ -47,6 +48,19 @@ async fn get_balance(state: web::Data<AppState>) -> impl Responder {
     web::Json(GetBalanceResponse::new(balance))
 }
 
+// test api to generate UTXO for myself
+#[post("/generate-block")]
+async fn generate_block(state: web::Data<AppState>) -> impl Responder {
+    let addr = state.key_manager.lock().unwrap().get_address();
+    let payload = ApplicationPayload::Enhanced {
+        data: addr.as_bytes().to_owned(),
+    };
+    state.core.lock().unwrap().send_msg_to_core(payload).await;
+    HttpResponse::Ok()
+}
+
 pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(hello).service(get_balance);
+    cfg.service(hello)
+        .service(get_balance)
+        .service(generate_block);
 }

@@ -1,4 +1,6 @@
-use crate::blockchain::transaction::{NormalTransaction, Transaction, Transactions};
+use crate::blockchain::transaction::{
+    Address, CoinbaseTransaction, NormalTransaction, Transaction, Transactions,
+};
 use crate::util;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -57,6 +59,10 @@ impl Block {
         Block { inner, nonce }
     }
 
+    pub fn get_transaction_at(&self, idx: usize) -> Option<Transaction> {
+        self.inner.transaction.get_transaction_at(idx)
+    }
+
     pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
         self.inner.transaction.get_normal_transactions()
     }
@@ -76,6 +82,11 @@ impl Block {
         let hash = self.calculate_hash()?;
         let target = "0".repeat(difficulty);
         Ok(hash.ends_with(&target))
+    }
+
+    pub fn miner(&self) -> Address {
+        let tx = self.get_transaction_at(0).unwrap();
+        tx.get_output(0).unwrap().get_recipient()
     }
 }
 

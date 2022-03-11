@@ -152,6 +152,10 @@ impl Transactions {
         Transactions(txs)
     }
 
+    pub fn get_transaction_at(&self, idx: usize) -> Option<Transaction> {
+        self.0.iter().cloned().nth(idx)
+    }
+
     pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
         self.0
             .iter()

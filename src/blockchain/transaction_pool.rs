@@ -2,6 +2,7 @@ use crate::blockchain::block::BlockWithoutProof;
 use crate::blockchain::manager::BlockchainManager;
 use crate::blockchain::transaction::{CoinbaseTransaction, NormalTransaction, Transactions};
 use crate::connection_manager_core::{ConnectionManagerCore, ConnectionManagerInner};
+use crate::key_manager::KeyManager;
 use crate::message::{ApplicationPayload, Message, Payload};
 use chrono::Utc;
 use log::{debug, info};
@@ -62,6 +63,7 @@ impl TransactionPool {
         pool: Arc<Mutex<TransactionPool>>,
         blockchain_manager: Arc<Mutex<BlockchainManager>>,
         connection_manager: Arc<Mutex<ConnectionManagerInner>>,
+        key_manager: Arc<Mutex<KeyManager>>,
         interval: Duration,
     ) {
         debug!("generate_block_periodically was called");
@@ -70,54 +72,56 @@ impl TransactionPool {
         let num_pool_txs = pool_txs.len();
 
         let difficulty = blockchain_manager.lock().unwrap().get_difficulty();
+        let addr = key_manager.lock().unwrap().get_address();
 
-        if !pool_txs.is_empty() {
-            let prev_block_hash = blockchain_manager.lock().unwrap().get_last_block_hash();
-            let block = tokio::task::spawn_blocking(move || {
-                // FIXME: create coinbase
-                let transactions = Transactions::new(
-                    CoinbaseTransaction::new("myaddr".to_string(), 10, Utc::now()),
-                    pool_txs,
-                );
-                BlockWithoutProof::new(transactions, prev_block_hash.clone()).mine(difficulty)
-            })
-            .await
-            .unwrap()
-            .unwrap();
+        let prev_block_hash = blockchain_manager.lock().unwrap().get_last_block_hash();
+        let block = tokio::task::spawn_blocking(move || {
+            let transactions =
+                Transactions::new(CoinbaseTransaction::new(addr, 10, Utc::now()), pool_txs);
+            BlockWithoutProof::new(transactions, prev_block_hash.clone()).mine(difficulty)
+        })
+        .await
+        .unwrap()
+        .unwrap();
 
-            let is_block_added;
-            {
-                let mut manager = blockchain_manager.lock().unwrap();
-                let mut pool = pool.lock().unwrap();
+        let is_block_added;
+        {
+            let mut manager = blockchain_manager.lock().unwrap();
+            let mut pool = pool.lock().unwrap();
 
-                // If new blocks came from other core nodes, throw away the block and do again
-                is_block_added = block.get_prev_block_hash() != manager.get_last_block_hash();
-                if is_block_added {
-                    info!("generated block, but it was old. Ignore it.");
-                } else {
-                    manager.add_new_block(block.clone());
-                    debug!("generated block: {:?}", block);
-                    debug!("Current blockchain is: {:?}", manager.get_chain());
-                    pool.remove_transactions(0..num_pool_txs);
-                }
-            }
-
-            // notify a new block
-            if !is_block_added {
-                let payload = Payload::Application {
-                    payload: ApplicationPayload::NewBlock { block },
-                };
-                let port = connection_manager.lock().unwrap().get_my_addr().port();
-                ConnectionManagerCore::send_msg_to_core_nodes(
-                    Arc::clone(&connection_manager),
-                    Message::new(port, payload),
-                )
-                .await;
+            // If new blocks came from other core nodes, throw away the block and do again
+            is_block_added = block.get_prev_block_hash() != manager.get_last_block_hash();
+            if is_block_added {
+                info!("generated block, but it was old. Ignore it.");
+            } else {
+                manager.add_new_block(block.clone());
+                debug!("generated block: {:?}", block);
+                debug!("Current blockchain is: {:?}", manager.get_chain());
+                pool.remove_transactions(0..num_pool_txs);
             }
         }
 
-        tokio::time::sleep(interval).await;
-        Self::generate_block_periodically(pool, blockchain_manager, connection_manager, interval)
+        // notify a new block
+        if !is_block_added {
+            let payload = Payload::Application {
+                payload: ApplicationPayload::NewBlock { block },
+            };
+            let port = connection_manager.lock().unwrap().get_my_addr().port();
+            ConnectionManagerCore::send_msg_to_core_nodes(
+                Arc::clone(&connection_manager),
+                Message::new(port, payload),
+            )
             .await;
+        }
+
+        tokio::time::sleep(interval).await;
+        Self::generate_block_periodically(
+            pool,
+            blockchain_manager,
+            connection_manager,
+            key_manager,
+            interval,
+        )
+        .await;
     }
 }

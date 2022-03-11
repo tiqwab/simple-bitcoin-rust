@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use futures::StreamExt;
+use rand::rngs::OsRng;
 use server_core::ServerCore;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
 use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
+use simple_bitcoin::key_manager::KeyManager;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 
@@ -46,14 +48,17 @@ async fn main() -> Result<()> {
     let handle = signals.handle();
     let signal_task = tokio::spawn(handle_signals(signals));
 
-    let bm = Arc::new(Mutex::new(BlockchainManager::new(5)));
+    let rng = OsRng;
+
+    let bm = Arc::new(Mutex::new(BlockchainManager::new(4)));
     let tp = Arc::new(Mutex::new(TransactionPool::new()));
+    let km = Arc::new(Mutex::new(KeyManager::new(rng.clone()).unwrap()));
 
     let args = Args::parse();
     let listen_addr = convert_to_addr(args.listen_addr)?;
     let core_addr = args.core_addr.map(|x| convert_to_addr(x).unwrap());
 
-    let mut core = ServerCore::new(listen_addr, core_addr, tp, bm);
+    let mut core = ServerCore::new(listen_addr, core_addr, tp, bm, km);
     core.start().await;
     core.join_network().await;
 

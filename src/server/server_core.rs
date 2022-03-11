@@ -1,9 +1,16 @@
-use anyhow::Context;
+use actix_web::web::block;
+use anyhow::{Context, Result};
+use chrono::Utc;
 use log::{debug, info, warn};
+use simple_bitcoin::blockchain::block::BlockWithoutProof;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
+use simple_bitcoin::blockchain::transaction::{
+    CoinbaseTransaction, NormalTransaction, TransactionInput, TransactionOutput, Transactions,
+};
 use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
 use simple_bitcoin::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
-use simple_bitcoin::message::ApplicationPayload;
+use simple_bitcoin::key_manager::KeyManager;
+use simple_bitcoin::message::{ApplicationPayload, Message, Payload};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -21,11 +28,13 @@ pub struct ServerCore {
     cm: ConnectionManagerCore,
     bm: Arc<Mutex<BlockchainManager>>,
     tp: Arc<Mutex<TransactionPool>>,
+    km: Arc<Mutex<KeyManager>>,
 }
 
 fn generate_application_payload_handler(
     transaction_pool: Arc<Mutex<TransactionPool>>,
     blockchain_manager: Arc<Mutex<BlockchainManager>>,
+    key_manager: Arc<Mutex<KeyManager>>,
 ) -> impl ApplicationPayloadHandler {
     // An implementation of ApplicationPayloadHandler
     move |payload: ApplicationPayload,
@@ -89,8 +98,34 @@ fn generate_application_payload_handler(
 
                 None
             }
-            ApplicationPayload::Enhanced { .. } => {
-                unimplemented!()
+            ApplicationPayload::Enhanced { data } => {
+                // Supply coin for development
+                let my_addr = key_manager.lock().unwrap().get_address();
+                let recipient_addr = String::from_utf8(data).unwrap();
+                println!("my_addr: {}, recipient_addr: {}", my_addr, recipient_addr);
+
+                let chain = blockchain_manager.lock().unwrap().get_chain();
+                let block = chain.into_iter().find(|block| block.miner() == my_addr);
+
+                if let Some(block) = block {
+                    let input_tx = block.get_transaction_at(0).unwrap();
+                    let transaction = NormalTransaction::new(
+                        vec![TransactionInput::new(input_tx, 0)],
+                        vec![TransactionOutput::new(recipient_addr, 10)],
+                        Utc::now(),
+                    );
+
+                    transaction_pool
+                        .lock()
+                        .unwrap()
+                        .add_new_transaction(transaction.clone());
+
+                    let new_payload = ApplicationPayload::NewTransaction { transaction };
+                    Some((new_payload, core_nodes))
+                } else {
+                    warn!("No block was found to supply coin");
+                    None
+                }
             }
         }
     }
@@ -102,6 +137,7 @@ impl ServerCore {
         core_node_addr: Option<SocketAddr>,
         pool: Arc<Mutex<TransactionPool>>,
         manager: Arc<Mutex<BlockchainManager>>,
+        key_manager: Arc<Mutex<KeyManager>>,
     ) -> ServerCore {
         info!("Initializing ServerCore...");
         ServerCore {
@@ -109,10 +145,15 @@ impl ServerCore {
             core_node_addr,
             cm: ConnectionManagerCore::new(
                 my_addr,
-                generate_application_payload_handler(Arc::clone(&pool), Arc::clone(&manager)),
+                generate_application_payload_handler(
+                    Arc::clone(&pool),
+                    Arc::clone(&manager),
+                    Arc::clone(&key_manager),
+                ),
             ),
             bm: manager,
             tp: pool,
+            km: key_manager,
         }
     }
 
@@ -124,7 +165,8 @@ impl ServerCore {
             Arc::clone(&self.tp),
             Arc::clone(&self.bm),
             Arc::clone(&self.cm.inner),
-            Duration::from_secs(10),
+            Arc::clone(&self.km),
+            Duration::from_secs(60),
         ));
     }
 
