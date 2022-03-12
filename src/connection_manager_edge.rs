@@ -9,17 +9,28 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 
+// it works as trait alias which is not public API yet
+pub trait ApplicationPayloadHandler: Fn(ApplicationPayload) + Send + 'static {}
+
+impl<T: Fn(ApplicationPayload) + Send + 'static> ApplicationPayloadHandler for T {}
+
 pub struct ConnectionManagerInner {
     my_addr: SocketAddr,
+    app_msg_handler: Box<dyn ApplicationPayloadHandler>,
     current_core_node: Option<SocketAddr>,
     core_node_set: HashSet<SocketAddr>,
 }
 
 impl ConnectionManagerInner {
-    pub fn new(my_addr: SocketAddr, core_node_addr: SocketAddr) -> ConnectionManagerInner {
+    pub fn new(
+        my_addr: SocketAddr,
+        core_node_addr: SocketAddr,
+        app_msg_handler: impl ApplicationPayloadHandler,
+    ) -> ConnectionManagerInner {
         let node_set = HashSet::<SocketAddr>::new();
         let mut manager = ConnectionManagerInner {
             my_addr,
+            app_msg_handler: Box::new(app_msg_handler),
             current_core_node: Some(core_node_addr),
             core_node_set: node_set,
         };
@@ -71,13 +82,18 @@ pub struct ConnectionManagerEdge {
 }
 
 impl ConnectionManagerEdge {
-    pub fn new(my_addr: SocketAddr, core_node_addr: SocketAddr) -> ConnectionManagerEdge {
+    pub fn new(
+        my_addr: SocketAddr,
+        core_node_addr: SocketAddr,
+        app_msg_handler: impl ApplicationPayloadHandler,
+    ) -> ConnectionManagerEdge {
         info!("Initializing ConnectionManagerEdge...");
         ConnectionManagerEdge {
             my_addr,
             inner: Arc::new(Mutex::new(ConnectionManagerInner::new(
                 my_addr,
                 core_node_addr,
+                app_msg_handler,
             ))),
             check_peers_interval: Duration::from_secs(30),
             join_handle_for_listen: None,
@@ -195,6 +211,9 @@ impl ConnectionManagerEdge {
                         manager.core_node_set.insert(node);
                     }
                 }
+            }
+            Payload::Application { payload } => {
+                (manager.lock().unwrap().app_msg_handler)(payload);
             }
             _ => {
                 warn!(

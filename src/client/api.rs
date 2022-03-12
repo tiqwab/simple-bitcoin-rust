@@ -9,14 +9,14 @@ use std::sync::{Arc, Mutex};
 pub struct AppState {
     core: Arc<Mutex<ClientCore>>,
     key_manager: Mutex<KeyManager>,
-    utxo_manager: Mutex<UTXOManager>,
+    utxo_manager: Arc<Mutex<UTXOManager>>,
 }
 
 impl AppState {
     pub fn new(
         core: Arc<Mutex<ClientCore>>,
         key_manager: Mutex<KeyManager>,
-        utxo_manager: Mutex<UTXOManager>,
+        utxo_manager: Arc<Mutex<UTXOManager>>,
     ) -> AppState {
         AppState {
             core,
@@ -48,6 +48,14 @@ async fn get_balance(state: web::Data<AppState>) -> impl Responder {
     web::Json(GetBalanceResponse::new(balance))
 }
 
+#[post("/update-balance")]
+async fn request_update_balance(state: web::Data<AppState>) -> impl Responder {
+    let payload = ApplicationPayload::RequestFullChain;
+    let core = state.core.lock().unwrap();
+    core.send_msg_to_core(payload).await;
+    HttpResponse::Ok()
+}
+
 // test api to generate UTXO for myself
 #[post("/generate-block")]
 async fn generate_block(state: web::Data<AppState>) -> impl Responder {
@@ -62,5 +70,6 @@ async fn generate_block(state: web::Data<AppState>) -> impl Responder {
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(hello)
         .service(get_balance)
+        .service(request_update_balance)
         .service(generate_block);
 }

@@ -1,8 +1,11 @@
-use log::info;
+use log::{debug, info};
 use rand::prelude::*;
-use simple_bitcoin::connection_manager_edge::ConnectionManagerEdge;
+use simple_bitcoin::blockchain::transaction::Transaction;
+use simple_bitcoin::blockchain::utxo::UTXOManager;
+use simple_bitcoin::connection_manager_edge::{ApplicationPayloadHandler, ConnectionManagerEdge};
 use simple_bitcoin::message::ApplicationPayload;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub enum ClientCoreState {
@@ -16,12 +19,39 @@ pub struct ClientCore {
     cm: ConnectionManagerEdge,
 }
 
+fn generate_application_payload_handler(
+    utxo_manager: Arc<Mutex<UTXOManager>>,
+) -> impl ApplicationPayloadHandler {
+    move |payload: ApplicationPayload| {
+        debug!("handle_application_payload: {:?}", payload);
+
+        match payload {
+            ApplicationPayload::FullChain { chain } => {
+                let txs: Vec<Transaction> = chain
+                    .into_iter()
+                    .flat_map(|block| block.get_transactions())
+                    .collect();
+                utxo_manager.lock().unwrap().refresh_utxos(&txs);
+            }
+            _ => {}
+        }
+    }
+}
+
 impl ClientCore {
-    pub fn new(my_addr: SocketAddr, core_node_addr: SocketAddr) -> ClientCore {
+    pub fn new(
+        my_addr: SocketAddr,
+        core_node_addr: SocketAddr,
+        utxo_manager: Arc<Mutex<UTXOManager>>,
+    ) -> ClientCore {
         info!("Initializing ClientCore");
         ClientCore {
             state: ClientCoreState::Init,
-            cm: ConnectionManagerEdge::new(my_addr, core_node_addr),
+            cm: ConnectionManagerEdge::new(
+                my_addr,
+                core_node_addr,
+                generate_application_payload_handler(utxo_manager),
+            ),
         }
     }
 

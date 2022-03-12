@@ -63,6 +63,10 @@ impl Block {
         self.inner.transaction.get_transaction_at(idx)
     }
 
+    pub fn get_transactions(&self) -> Vec<Transaction> {
+        self.inner.transaction.get_transactions()
+    }
+
     pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
         self.inner.transaction.get_normal_transactions()
     }

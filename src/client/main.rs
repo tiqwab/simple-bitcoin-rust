@@ -58,19 +58,25 @@ async fn main() -> Result<()> {
     let core_addr = convert_to_addr(args.core_addr)?;
     let api_addr = convert_to_addr(args.api_addr)?;
 
-    let core = Arc::new(Mutex::new(ClientCore::new(listen_addr, core_addr)));
-    core.lock().unwrap().start().await;
-
     let rng = OsRng;
     let key_manager = Mutex::new(KeyManager::new(rng.clone()).unwrap());
     debug!("my address: {}", key_manager.lock().unwrap().get_address());
-    let utxo_manager = Mutex::new(UTXOManager::new(key_manager.lock().unwrap().get_address()));
+    let utxo_manager = Arc::new(Mutex::new(UTXOManager::new(
+        key_manager.lock().unwrap().get_address(),
+    )));
+
+    let core = Arc::new(Mutex::new(ClientCore::new(
+        listen_addr,
+        core_addr,
+        Arc::clone(&utxo_manager),
+    )));
+    core.lock().unwrap().start().await;
 
     info!("api binds at {}", api_addr);
     let app_data = web::Data::new(api::AppState::new(
         Arc::clone(&core),
         key_manager,
-        utxo_manager,
+        Arc::clone(&utxo_manager),
     ));
     HttpServer::new(move || {
         // loose condition just for development

@@ -156,6 +156,10 @@ impl Transactions {
         self.0.iter().cloned().nth(idx)
     }
 
+    pub fn get_transactions(&self) -> Vec<Transaction> {
+        self.0.clone()
+    }
+
     pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
         self.0
             .iter()
