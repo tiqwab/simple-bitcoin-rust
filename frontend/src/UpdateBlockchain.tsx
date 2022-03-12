@@ -1,20 +1,20 @@
 import {Button as BButton, Container as BContainer, Form as BForm} from "react-bootstrap";
 import React from "react";
 import axios from "axios";
+import {useToast} from "./useToast";
 
-const UpdateBlockchain = ({
-                              onUpdateBlockchainSuccess,
-                              onUpdateBlockchainFailure
-                          }: { onUpdateBlockchainSuccess: () => void, onUpdateBlockchainFailure: () => void }) => {
+const UpdateBlockchain = () => {
+    const showToast = useToast();
+
     const handleSubmit = React.useCallback(async () => {
         const url = `http://localhost:12345/update-balance`;
         axios.post(url).then((resp) => {
-            onUpdateBlockchainSuccess()
+            showToast({text: "Blockchain updated successfully", type: "success"})
         }).catch((err) => {
-            onUpdateBlockchainFailure()
+            showToast({text: "Failed to update Blockchain", type: "failure"})
         }).finally(() => {
         })
-    }, [onUpdateBlockchainSuccess, onUpdateBlockchainFailure]);
+    }, [showToast]);
 
     return (
         <BContainer>
