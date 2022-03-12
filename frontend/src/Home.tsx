@@ -23,9 +23,10 @@ interface BalanceState {
 
 function CurrentBalance() {
     const [result, setResult] = React.useState<BalanceState>({ data: null, error: null, isLoading: true });
+    const base_url = process.env.REACT_APP_SIMPLE_BITCOIN_BASE_URL
 
     const fetcher = (apiPath: string) => {
-        const url = `http://localhost:12345${apiPath}`;
+        const url = `${base_url}${apiPath}`;
         axios.get(url).then((resp: AxiosResponse<GetBalanceResponse>) => {
             setResult((cur) => ({
                 ...cur,

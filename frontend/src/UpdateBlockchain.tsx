@@ -3,11 +3,13 @@ import React from "react";
 import axios from "axios";
 import {useToast} from "./useToast";
 
+const base_url = process.env.REACT_APP_SIMPLE_BITCOIN_BASE_URL
+
 const UpdateBlockchain = () => {
     const showToast = useToast();
 
     const handleSubmit = React.useCallback(async () => {
-        const url = `http://localhost:12345/update-balance`;
+        const url = `${base_url}/update-balance`;
         axios.post(url).then((resp) => {
             showToast({text: "Blockchain updated successfully", type: "success"})
         }).catch((err) => {
