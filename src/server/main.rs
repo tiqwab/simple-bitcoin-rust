@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
 
     let rng = OsRng;
 
-    let bm = Arc::new(Mutex::new(BlockchainManager::new(4)));
+    let bm = Arc::new(Mutex::new(BlockchainManager::new(3)));
     let tp = Arc::new(Mutex::new(TransactionPool::new()));
     let km = Arc::new(Mutex::new(KeyManager::new(rng.clone()).unwrap()));
 

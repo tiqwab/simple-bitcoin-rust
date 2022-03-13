@@ -138,6 +138,18 @@ impl NormalTransaction {
             timestamp,
         }
     }
+
+    pub fn get_input_value(&self) -> u64 {
+        self.inputs
+            .iter()
+            .fold(0, |acc, input| acc + input.get_value())
+    }
+
+    pub fn get_output_value(&self) -> u64 {
+        self.outputs
+            .iter()
+            .fold(0, |acc, output| acc + output.get_value())
+    }
 }
 
 /// ブロック内の transaction リストを表現する。
