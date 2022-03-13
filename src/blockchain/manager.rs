@@ -30,7 +30,7 @@ impl BlockchainManager {
     pub fn get_genesis_block_hash(&self) -> BlockHash {
         let mut hasher = Sha256::new();
         hasher.update(r#"{"message":"this_is_simple_bitcoin_genesis_block"}"#);
-        util::to_hex(&hasher.finalize().to_vec())
+        util::bytes_to_hex(&hasher.finalize().to_vec())
     }
 
     pub fn get_chain(&self) -> Vec<Block> {

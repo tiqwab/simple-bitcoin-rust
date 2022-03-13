@@ -1,5 +1,8 @@
 use crate::blockchain::block::Block;
-use crate::blockchain::transaction::NormalTransaction;
+use crate::blockchain::transaction::{NormalTransaction, TransactionSignature};
+use crate::key_manager::KeyManager;
+use crate::util;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
@@ -46,7 +49,10 @@ impl Message {
 #[serde(tag = "msg_type")]
 pub enum ApplicationPayload {
     #[serde(rename = "0")]
-    NewTransaction { transaction: NormalTransaction },
+    NewTransaction {
+        transaction: NormalTransaction,
+        signature: TransactionSignature,
+    },
     #[serde(rename = "1")]
     NewBlock { block: Block },
     #[serde(rename = "2")]
@@ -55,6 +61,20 @@ pub enum ApplicationPayload {
     FullChain { chain: Vec<Block> },
     #[serde(rename = "4")]
     Enhanced { data: Vec<u8> },
+}
+
+impl ApplicationPayload {
+    pub fn for_transaction(
+        transaction: NormalTransaction,
+        km: &mut KeyManager,
+    ) -> Result<ApplicationPayload> {
+        let data = serde_json::to_string(&transaction)?;
+        let signature = km.sign(data.as_bytes())?;
+        Ok(ApplicationPayload::NewTransaction {
+            transaction,
+            signature: util::bytes_to_hex(&signature),
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

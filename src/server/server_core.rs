@@ -11,6 +11,7 @@ use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
 use simple_bitcoin::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
 use simple_bitcoin::key_manager::KeyManager;
 use simple_bitcoin::message::{ApplicationPayload, Message, Payload};
+use simple_bitcoin::util;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -43,13 +44,27 @@ fn generate_application_payload_handler(
           is_core: bool| {
         debug!("handle_application_payload: {:?}", payload);
         match payload {
-            ApplicationPayload::NewTransaction { transaction } => {
+            ApplicationPayload::NewTransaction {
+                transaction,
+                signature,
+            } => {
+                let public_key = transaction.get_input_pubkey();
+                let data = serde_json::to_string(&transaction).unwrap();
+                let sig_bytes = util::hex_to_bytes(signature.clone());
+                if let Err(err) = util::verify_signature(&sig_bytes, &public_key, data.as_bytes()) {
+                    warn!("Invalid transaction signature: {:?}", err);
+                    return None;
+                }
+
                 transaction_pool
                     .lock()
                     .unwrap()
                     .add_new_transaction(transaction.clone());
                 if !is_core {
-                    let new_payload = ApplicationPayload::NewTransaction { transaction };
+                    let new_payload = ApplicationPayload::NewTransaction {
+                        transaction,
+                        signature,
+                    };
                     Some((new_payload, core_nodes))
                 } else {
                     None
@@ -120,7 +135,11 @@ fn generate_application_payload_handler(
                         .unwrap()
                         .add_new_transaction(transaction.clone());
 
-                    let new_payload = ApplicationPayload::NewTransaction { transaction };
+                    let new_payload = ApplicationPayload::for_transaction(
+                        transaction,
+                        &mut key_manager.lock().unwrap(),
+                    )
+                    .unwrap();
                     Some((new_payload, core_nodes))
                 } else {
                     warn!("No block was found to supply coin");

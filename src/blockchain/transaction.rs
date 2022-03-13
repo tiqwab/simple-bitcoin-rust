@@ -1,7 +1,11 @@
+use crate::util;
 use chrono::{DateTime, Utc};
+use rsa::pkcs1::FromRsaPublicKey;
+use rsa::RsaPublicKey;
 use serde::{Deserialize, Serialize};
 
 pub type Address = String;
+pub type TransactionSignature = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionInput {
@@ -149,6 +153,11 @@ impl NormalTransaction {
         self.outputs
             .iter()
             .fold(0, |acc, output| acc + output.get_value())
+    }
+
+    pub fn get_input_pubkey(&self) -> RsaPublicKey {
+        let recipient = self.inputs.first().unwrap().get_recipient();
+        RsaPublicKey::from_pkcs1_der(&util::hex_to_bytes(recipient)).unwrap()
     }
 }
 

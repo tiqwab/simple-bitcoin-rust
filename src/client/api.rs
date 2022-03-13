@@ -97,7 +97,8 @@ async fn post_transaction(
         }
     };
 
-    let payload = ApplicationPayload::NewTransaction { transaction: tx };
+    let payload =
+        ApplicationPayload::for_transaction(tx, &mut state.key_manager.lock().unwrap()).unwrap();
     state.core.lock().unwrap().send_msg_to_core(payload).await;
     HttpResponse::Created().finish()
 }
