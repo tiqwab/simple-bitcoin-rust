@@ -2,7 +2,7 @@ use crate::blockchain::block::{Block, BlockHash};
 use crate::blockchain::transaction::{NormalTransaction, Transaction};
 use crate::blockchain::transaction_pool::TransactionPool;
 use crate::util;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
 
@@ -64,15 +64,11 @@ impl BlockchainManager {
             return Err(err);
         }
 
-        // check difficulty
-        if !block.is_valid(self.difficulty)? {
-            let err = anyhow!(
-                "block hash ({}) doesn't satisfy difficulty ({}). Block: {:?}",
-                block.calculate_hash()?,
-                self.difficulty,
-                block
-            );
-            return Err(err);
+        // check difficulty etc.
+        block.is_valid(self.difficulty)?;
+
+        for tx in block.get_normal_transactions() {
+            self.is_valid_transaction(&tx)?;
         }
 
         Ok(())

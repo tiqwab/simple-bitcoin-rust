@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // FIXME: mining 報酬のベタ書き
-const COINBASE_INCENTIVE: u64 = 10;
+pub const COINBASE_INCENTIVE: u64 = 10;
 
 pub struct TransactionPool {
     transactions: Vec<NormalTransaction>,

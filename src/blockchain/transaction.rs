@@ -121,6 +121,10 @@ impl CoinbaseTransaction {
             timestamp,
         }
     }
+
+    pub fn get_value(&self) -> u64 {
+        self.value
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -180,41 +184,54 @@ impl NormalTransaction {
 /// ブロック内の transaction リストを表現する。
 /// 最初の transaction が coinbase, 以降は normal であることを保証する。
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct Transactions(Vec<Transaction>);
+pub struct Transactions {
+    coinbase: CoinbaseTransaction,
+    transactions: Vec<NormalTransaction>,
+}
 
 impl Transactions {
-    pub fn new(head: CoinbaseTransaction, tail: Vec<NormalTransaction>) -> Transactions {
-        let mut txs = vec![Transaction::Coinbase(head)];
-        txs.extend(tail.into_iter().map(Transaction::Normal));
-        Transactions(txs)
+    pub fn new(
+        coinbase: CoinbaseTransaction,
+        transactions: Vec<NormalTransaction>,
+    ) -> Transactions {
+        Transactions {
+            coinbase,
+            transactions,
+        }
     }
 
     pub fn get_transaction_at(&self, idx: usize) -> Option<Transaction> {
-        self.0.iter().cloned().nth(idx)
+        if idx == 0 {
+            Some(Transaction::Coinbase(self.coinbase.clone()))
+        } else {
+            self.transactions
+                .iter()
+                .cloned()
+                .nth(idx - 1)
+                .map(Transaction::Normal)
+        }
     }
 
     pub fn get_transactions(&self) -> Vec<Transaction> {
-        self.0.clone()
+        vec![Transaction::Coinbase(self.coinbase.clone())]
+            .into_iter()
+            .chain(self.transactions.iter().cloned().map(Transaction::Normal))
+            .collect()
+    }
+
+    pub fn get_coinbase_transaction(&self) -> CoinbaseTransaction {
+        self.coinbase.clone()
     }
 
     pub fn get_normal_transactions(&self) -> Vec<NormalTransaction> {
-        self.0
-            .iter()
-            .cloned()
-            .filter_map(|x| {
-                if let Transaction::Normal(tx) = x {
-                    Some(tx)
-                } else {
-                    None
-                }
-            })
-            .collect()
+        self.transactions.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration;
     use std::str::FromStr;
 
     #[test]
@@ -222,35 +239,35 @@ mod tests {
         let now: DateTime<Utc> = DateTime::from_str("2022-03-09T12:00:00Z").unwrap();
 
         let json = r#"
-            [
-              {
-                "tx_type": "0",
+            {
+              "coinbase": {
                 "recipient": "alice",
                 "value": 10,
                 "timestamp": "2022-03-09T12:00:00Z"
               },
-              {
-                "tx_type": "1",
-                "inputs": [
-                  {
-                    "transaction": {
-                      "tx_type": "0",
-                      "recipient": "alice",
-                      "value": 10,
-                      "timestamp": "2022-03-09T12:00:00Z"
-                    },
-                    "index": 0
-                  }
-                ],
-                "outputs": [
-                  {
-                    "recipient": "bob",
-                    "value": 10
-                  }
-                ],
-                "timestamp": "2022-03-09T12:00:00Z"
-              }
-            ]
+              "transactions": [
+                {
+                  "inputs": [
+                    {
+                      "transaction": {
+                        "tx_type": "0",
+                        "recipient": "alice",
+                        "value": 10,
+                        "timestamp": "2022-03-09T12:00:00Z"
+                      },
+                      "index": 0
+                    }
+                  ],
+                  "outputs": [
+                    {
+                      "recipient": "bob",
+                      "value": 10
+                    }
+                  ],
+                  "timestamp": "2022-03-09T12:00:00Z"
+                }
+              ]
+            }
         "#;
 
         let actual: Transactions =
@@ -276,14 +293,14 @@ mod tests {
         let now: DateTime<Utc> = DateTime::from_str("2022-03-09T12:00:00Z").unwrap();
 
         let txs = Transactions::new(
-            CoinbaseTransaction::new("alice".to_string(), 10, Utc::now()),
+            CoinbaseTransaction::new("alice".to_string(), 10, now),
             vec![NormalTransaction::new(
                 vec![TransactionInput::new(
                     Transaction::Coinbase(CoinbaseTransaction::new("alice".to_string(), 10, now)),
                     0,
                 )],
                 vec![TransactionOutput::new("bob".to_string(), 10)],
-                Utc::now(),
+                now,
             )],
         );
 
@@ -292,5 +309,55 @@ mod tests {
             serde_json::from_str(&json).expect("failed to parse transactions");
 
         assert_eq!(actual, txs);
+    }
+
+    fn generate_sample() -> (CoinbaseTransaction, NormalTransaction, Transactions) {
+        let now: DateTime<Utc> = DateTime::from_str("2022-03-09T12:00:00Z").unwrap();
+        let sec = Duration::seconds(1);
+
+        let tx1 = CoinbaseTransaction::new("alice".to_string(), 10, now + sec * 0);
+        let tx2 = NormalTransaction::new(
+            vec![TransactionInput::new(
+                Transaction::Coinbase(CoinbaseTransaction::new(
+                    "alice".to_string(),
+                    10,
+                    now + sec * 1,
+                )),
+                0,
+            )],
+            vec![TransactionOutput::new("bob".to_string(), 10)],
+            Utc::now(),
+        );
+        let txs = Transactions::new(tx1.clone(), vec![tx2.clone()]);
+        (tx1, tx2, txs)
+    }
+
+    #[test]
+    fn test_get_transaction_at() {
+        let (tx1, tx2, txs) = generate_sample();
+        assert_eq!(
+            txs.get_transaction_at(0),
+            Some(Transaction::Coinbase(tx1.clone()))
+        );
+        assert_eq!(
+            txs.get_transaction_at(1),
+            Some(Transaction::Normal(tx2.clone()))
+        );
+        assert_eq!(txs.get_transaction_at(2), None);
+    }
+
+    #[test]
+    fn test_get_transactions() {
+        let (tx1, tx2, txs) = generate_sample();
+        assert_eq!(
+            txs.get_transactions(),
+            vec![Transaction::Coinbase(tx1), Transaction::Normal(tx2)]
+        );
+    }
+
+    #[test]
+    fn test_get_normal_transactions() {
+        let (tx1, tx2, txs) = generate_sample();
+        assert_eq!(txs.get_normal_transactions(), vec![tx2]);
     }
 }
