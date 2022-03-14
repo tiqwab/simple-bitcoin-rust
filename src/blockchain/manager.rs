@@ -139,6 +139,8 @@ impl BlockchainManager {
 
     pub fn is_valid_transaction(&self, tx: &NormalTransaction) -> Result<()> {
         // block 内に組み込まれた transaction か
+        // TODO?: ただこれ pool は考慮しないので chain に埋め込まれてからでないと作成された UTXO を利用できない。
+        // それは間違っていないんだけど使い勝手としてどうなんだろうか
         fn does_exist_in_chain(target: &NormalTransaction, chain: &Vec<Block>) -> Result<()> {
             for input in target.get_inputs() {
                 let tx_opt = chain

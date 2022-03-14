@@ -12,6 +12,9 @@ use std::ops::RangeBounds;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+// FIXME: mining 報酬のベタ書き
+const COINBASE_INCENTIVE: u64 = 10;
+
 pub struct TransactionPool {
     transactions: Vec<NormalTransaction>,
 }
@@ -71,6 +74,13 @@ impl TransactionPool {
         false
     }
 
+    pub fn calc_total_fee(&self) -> u64 {
+        self.transactions.iter().fold(0, |acc, tx| {
+            let fee = tx.get_input_value() - tx.get_output_value();
+            acc + fee
+        })
+    }
+
     #[async_recursion::async_recursion]
     pub async fn generate_block_periodically(
         pool: Arc<Mutex<TransactionPool>>,
@@ -81,16 +91,25 @@ impl TransactionPool {
     ) {
         debug!("generate_block_periodically was called");
 
-        let pool_txs = pool.lock().unwrap().get_transactions();
-        let num_pool_txs = pool_txs.len();
+        let pool_txs: Vec<NormalTransaction>;
+        let num_pool_txs: usize;
+        let total_fee: u64;
+        {
+            let pool = pool.lock().unwrap();
+            pool_txs = pool.get_transactions();
+            num_pool_txs = pool_txs.len();
+            total_fee = pool.calc_total_fee();
+        }
 
         let difficulty = blockchain_manager.lock().unwrap().get_difficulty();
         let addr = key_manager.lock().unwrap().get_address();
 
         let prev_block_hash = blockchain_manager.lock().unwrap().get_last_block_hash();
         let block = tokio::task::spawn_blocking(move || {
-            let transactions =
-                Transactions::new(CoinbaseTransaction::new(addr, 10, Utc::now()), pool_txs);
+            let transactions = Transactions::new(
+                CoinbaseTransaction::new(addr, COINBASE_INCENTIVE + total_fee, Utc::now()),
+                pool_txs,
+            );
             BlockWithoutProof::new(transactions, prev_block_hash.clone()).mine(difficulty)
         })
         .await
