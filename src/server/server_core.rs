@@ -56,6 +56,15 @@ fn generate_application_payload_handler(
                     return None;
                 }
 
+                if let Err(err) = blockchain_manager
+                    .lock()
+                    .unwrap()
+                    .is_valid_transaction(&transaction)
+                {
+                    warn!("Invalid transaction: {:?}", err);
+                    return None;
+                }
+
                 transaction_pool
                     .lock()
                     .unwrap()

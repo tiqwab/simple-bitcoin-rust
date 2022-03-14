@@ -1,8 +1,8 @@
 use crate::blockchain::block::{Block, BlockHash};
-use crate::blockchain::transaction::NormalTransaction;
+use crate::blockchain::transaction::{NormalTransaction, Transaction};
 use crate::blockchain::transaction_pool::TransactionPool;
 use crate::util;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
 
@@ -35,6 +35,14 @@ impl BlockchainManager {
 
     pub fn get_chain(&self) -> Vec<Block> {
         self.chain.clone()
+    }
+
+    pub fn get_transactions(&self) -> Vec<Transaction> {
+        let mut res = vec![];
+        for block in self.get_chain() {
+            res.extend(block.get_transactions());
+        }
+        res
     }
 
     pub fn get_difficulty(&self) -> usize {
@@ -128,6 +136,43 @@ impl BlockchainManager {
             .filter(|t| !main_transactions.contains(&t))
             .collect()
     }
+
+    pub fn is_valid_transaction(&self, tx: &NormalTransaction) -> Result<()> {
+        // block 内に組み込まれた transaction か
+        fn does_exist_in_chain(target: &NormalTransaction, chain: &Vec<Block>) -> Result<()> {
+            for input in target.get_inputs() {
+                let tx_opt = chain
+                    .iter()
+                    .flat_map(|block| block.get_transactions())
+                    .find(|tx| tx == input.get_transaction());
+
+                if let None = tx_opt {
+                    bail!("Invalid input is included in transaction (not exist in chain)");
+                }
+            }
+            Ok(())
+        }
+
+        // まだ使われていない transaction か
+        fn is_utxo(target: &NormalTransaction, chain: &Vec<Block>) -> Result<()> {
+            for target_input in target.get_inputs() {
+                let input_opt = chain
+                    .iter()
+                    .flat_map(|block| block.get_transactions())
+                    .flat_map(|tx| tx.get_inputs())
+                    .find(|input| input == &target_input);
+
+                if let Some(_) = input_opt {
+                    bail!("Invalid input is included in transaction (already used)");
+                }
+            }
+            Ok(())
+        }
+
+        does_exist_in_chain(tx, &self.get_chain())?;
+        is_utxo(tx, &self.get_chain())?;
+        Ok(())
+    }
 }
 
 /// 渡された chain が valid か確認する
@@ -149,7 +194,10 @@ mod tests {
     use crate::blockchain::transaction::{
         CoinbaseTransaction, Transaction, TransactionInput, TransactionOutput, Transactions,
     };
-    use chrono::Utc;
+    use crate::blockchain::utxo::UTXOManager;
+    use crate::key_manager::KeyManager;
+    use chrono::{Duration, Utc};
+    use rand::rngs::OsRng;
 
     fn generate_block(
         transactions: Vec<NormalTransaction>,
@@ -166,7 +214,7 @@ mod tests {
     fn test_remove_useless_transactions() {
         // setup
         let mut pool = TransactionPool::new();
-        let mut manager = BlockchainManager::new(2);
+        let mut manager = BlockchainManager::new(1);
 
         let base = Transaction::Coinbase(CoinbaseTransaction::new(
             "alice".to_string(),
@@ -208,7 +256,7 @@ mod tests {
     #[test]
     fn test_resolve_conflicts_longer_than_mine() {
         // setup
-        let mut manager = BlockchainManager::new(2);
+        let mut manager = BlockchainManager::new(1);
 
         let base = Transaction::Coinbase(CoinbaseTransaction::new(
             "alice".to_string(),
@@ -279,7 +327,7 @@ mod tests {
     #[test]
     fn test_resolve_conflicts_shorter_than_mine() {
         // setup
-        let mut manager = BlockchainManager::new(2);
+        let mut manager = BlockchainManager::new(1);
 
         let base = Transaction::Coinbase(CoinbaseTransaction::new(
             "alice".to_string(),
@@ -332,5 +380,103 @@ mod tests {
         // verify
         assert_eq!(res.len(), 0);
         assert_eq!(manager.get_chain(), vec![block1, block2]);
+    }
+
+    #[test]
+    fn test_is_valid_transaction_returns_ok() {
+        // setup
+        let rng = OsRng;
+        let km1 = KeyManager::new(rng.clone()).unwrap();
+        let km2 = KeyManager::new(rng.clone()).unwrap();
+        let mut um1 = UTXOManager::new(km1.get_address());
+        let mut bm = BlockchainManager::new(1);
+
+        // block1
+        let tx1 = CoinbaseTransaction::new(km1.get_address(), 20, Utc::now());
+        let block1 = BlockWithoutProof::new(
+            Transactions::new(tx1.clone(), vec![]),
+            bm.get_last_block_hash(),
+        )
+        .mine(bm.get_difficulty())
+        .unwrap();
+        bm.add_new_block(block1.clone());
+        um1.refresh_utxos(&bm.get_transactions());
+
+        // block2
+        let tx2 = CoinbaseTransaction::new(km1.get_address(), 10, Utc::now());
+        let tx3 = um1.create_transaction_for(km2.get_address(), 5, 1).unwrap();
+        let block2 = BlockWithoutProof::new(
+            Transactions::new(tx2.clone(), vec![tx3.clone()]),
+            bm.get_last_block_hash(),
+        )
+        .mine(bm.get_difficulty())
+        .unwrap();
+        bm.add_new_block(block2.clone());
+        um1.refresh_utxos(&bm.get_transactions());
+
+        assert!(is_valid_chain(bm.get_genesis_block_hash(), &bm.get_chain()).unwrap());
+
+        // exercise and verify
+        let new_tx = NormalTransaction::new(
+            vec![TransactionInput::new(Transaction::Normal(tx3.clone()), 0)],
+            vec![TransactionOutput::new(km1.get_address(), 4)],
+            Utc::now(),
+        );
+        assert!(bm.is_valid_transaction(&new_tx).is_ok());
+    }
+
+    #[test]
+    fn test_is_valid_transaction_returns_err() {
+        // setup
+        let rng = OsRng;
+        let km1 = KeyManager::new(rng.clone()).unwrap();
+        let km2 = KeyManager::new(rng.clone()).unwrap();
+        let km3 = KeyManager::new(rng.clone()).unwrap();
+        let mut um1 = UTXOManager::new(km1.get_address());
+        let mut bm = BlockchainManager::new(1);
+
+        // block1
+        let tx1 = CoinbaseTransaction::new(km1.get_address(), 20, Utc::now());
+        let block1 = BlockWithoutProof::new(
+            Transactions::new(tx1.clone(), vec![]),
+            bm.get_last_block_hash(),
+        )
+        .mine(bm.get_difficulty())
+        .unwrap();
+        bm.add_new_block(block1.clone());
+        um1.refresh_utxos(&bm.get_transactions());
+
+        // block2
+        let tx2 = CoinbaseTransaction::new(km1.get_address(), 10, Utc::now());
+        let tx3 = um1.create_transaction_for(km2.get_address(), 5, 1).unwrap();
+        let block2 = BlockWithoutProof::new(
+            Transactions::new(tx2.clone(), vec![tx3]),
+            bm.get_last_block_hash(),
+        )
+        .mine(bm.get_difficulty())
+        .unwrap();
+        bm.add_new_block(block2.clone());
+        um1.refresh_utxos(&bm.get_transactions());
+
+        assert!(is_valid_chain(bm.get_genesis_block_hash(), &bm.get_chain()).unwrap());
+
+        // exercise and verify with unknown transaction
+        let new_tx = NormalTransaction::new(
+            vec![TransactionInput::new(
+                Transaction::Coinbase(CoinbaseTransaction::new(km3.get_address(), 10, Utc::now())),
+                0,
+            )],
+            vec![TransactionOutput::new(km1.get_address(), 4)],
+            Utc::now(),
+        );
+        assert!(bm.is_valid_transaction(&new_tx).is_err());
+
+        // exercise and verify with used transaction
+        let new_tx = NormalTransaction::new(
+            vec![TransactionInput::new(Transaction::Coinbase(tx1.clone()), 0)],
+            vec![TransactionOutput::new(km1.get_address(), 4)],
+            Utc::now(),
+        );
+        assert!(bm.is_valid_transaction(&new_tx).is_err());
     }
 }

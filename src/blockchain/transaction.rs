@@ -159,6 +159,22 @@ impl NormalTransaction {
         let recipient = self.inputs.first().unwrap().get_recipient();
         RsaPublicKey::from_pkcs1_der(&util::hex_to_bytes(recipient)).unwrap()
     }
+
+    pub fn get_input(&self, idx: usize) -> Option<TransactionInput> {
+        self.inputs.iter().nth(idx).cloned()
+    }
+
+    pub fn get_inputs(&self) -> Vec<TransactionInput> {
+        self.inputs.clone()
+    }
+
+    pub fn get_output(&self, idx: usize) -> Option<TransactionOutput> {
+        self.outputs.iter().nth(idx).cloned()
+    }
+
+    pub fn get_outputs(&self) -> Vec<TransactionOutput> {
+        self.outputs.clone()
+    }
 }
 
 /// ブロック内の transaction リストを表現する。
