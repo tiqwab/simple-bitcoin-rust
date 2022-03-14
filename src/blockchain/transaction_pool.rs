@@ -1,6 +1,8 @@
 use crate::blockchain::block::BlockWithoutProof;
 use crate::blockchain::manager::BlockchainManager;
-use crate::blockchain::transaction::{CoinbaseTransaction, NormalTransaction, Transactions};
+use crate::blockchain::transaction::{
+    CoinbaseTransaction, NormalTransaction, TransactionInput, Transactions,
+};
 use crate::connection_manager_core::{ConnectionManagerCore, ConnectionManagerInner};
 use crate::key_manager::KeyManager;
 use crate::message::{ApplicationPayload, Message, Payload};
@@ -56,6 +58,17 @@ impl TransactionPool {
         {
             self.transactions.remove(index);
         }
+    }
+
+    pub fn has_transaction_input(&self, target_input: &TransactionInput) -> bool {
+        for tx in self.transactions.iter() {
+            for input in tx.get_inputs() {
+                if &input == target_input {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     #[async_recursion::async_recursion]

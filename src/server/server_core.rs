@@ -48,6 +48,9 @@ fn generate_application_payload_handler(
                 transaction,
                 signature,
             } => {
+                let blockchain_manager = blockchain_manager.lock().unwrap();
+                let mut transaction_pool = transaction_pool.lock().unwrap();
+
                 let public_key = transaction.get_input_pubkey();
                 let data = serde_json::to_string(&transaction).unwrap();
                 let sig_bytes = util::hex_to_bytes(signature.clone());
@@ -56,19 +59,23 @@ fn generate_application_payload_handler(
                     return None;
                 }
 
-                if let Err(err) = blockchain_manager
-                    .lock()
-                    .unwrap()
-                    .is_valid_transaction(&transaction)
-                {
+                if let Err(err) = blockchain_manager.is_valid_transaction(&transaction) {
                     warn!("Invalid transaction: {:?}", err);
                     return None;
                 }
 
-                transaction_pool
-                    .lock()
-                    .unwrap()
-                    .add_new_transaction(transaction.clone());
+                for input in transaction.get_inputs() {
+                    if transaction_pool.has_transaction_input(&input) {
+                        warn!(
+                            "Invalid transaction because {:?} is already in transaction pool.",
+                            input
+                        );
+                        return None;
+                    }
+                }
+
+                transaction_pool.add_new_transaction(transaction.clone());
+
                 if !is_core {
                     let new_payload = ApplicationPayload::NewTransaction {
                         transaction,
