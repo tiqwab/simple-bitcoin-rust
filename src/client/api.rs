@@ -34,11 +34,6 @@ impl AppState {
     }
 }
 
-#[get("/hello")]
-async fn hello() -> impl Responder {
-    "hello"
-}
-
 #[derive(Deserialize, Serialize)]
 struct GetBalanceResponse {
     balance: u64,
@@ -54,6 +49,23 @@ impl GetBalanceResponse {
 async fn get_balance(state: web::Data<AppState>) -> impl Responder {
     let balance = state.utxo_manager.lock().unwrap().get_balance();
     web::Json(GetBalanceResponse::new(balance))
+}
+
+#[derive(Deserialize, Serialize)]
+struct GetAddressResponse {
+    address: Address,
+}
+
+impl GetAddressResponse {
+    fn new(address: Address) -> GetAddressResponse {
+        GetAddressResponse { address }
+    }
+}
+
+#[get("/address/me")]
+async fn get_my_address(state: web::Data<AppState>) -> impl Responder {
+    let addr = state.key_manager.lock().unwrap().get_address();
+    web::Json(GetAddressResponse::new(addr))
 }
 
 #[post("/update-balance")]
@@ -104,8 +116,8 @@ async fn post_transaction(
 }
 
 pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(hello)
-        .service(get_balance)
+    cfg.service(get_balance)
+        .service(get_my_address)
         .service(request_update_balance)
         .service(generate_block)
         .service(post_transaction);

@@ -1,15 +1,16 @@
 import {Button as BButton, Container as BContainer, Form as BForm} from "react-bootstrap";
 import React, {ChangeEvent, FormEvent} from "react";
-import axios, {AxiosResponse} from "axios";
+import axios from "axios";
 import {useToast} from "./useToast";
+import useFetcher from "./useFetcher";
 
 const base_url = process.env.REACT_APP_SIMPLE_BITCOIN_BASE_URL
 
 function Home() {
     return (
         <BContainer>
-            <CurrentBalance />
-            <SendCoinForm />
+            <CurrentBalance/>
+            <SendCoinForm/>
         </BContainer>
     )
 }
@@ -18,45 +19,12 @@ interface GetBalanceResponse {
     balance: number,
 }
 
-interface BalanceState {
-    data: GetBalanceResponse | null,
-    error: any,
-    isLoading: boolean,
-}
-
 function CurrentBalance() {
-    const [result, setResult] = React.useState<BalanceState>({ data: null, error: null, isLoading: true });
-
-    const fetcher = (apiPath: string) => {
-        const url = `${base_url}${apiPath}`;
-        axios.get(url).then((resp: AxiosResponse<GetBalanceResponse>) => {
-            setResult((cur) => ({
-                ...cur,
-                data: resp.data,
-                isLoading: false,
-            }))
-        }).catch((err) => {
-            setResult((cur) => ({
-                ...cur,
-                error: err,
-                isLoading: false,
-            }))
-        });
-    };
-
-    React.useEffect(() => {
-        setResult(() => ({
-            data: null,
-            error: null,
-            isLoading: true,
-        }))
-
-        fetcher("/balance");
-    }, []);
+    const result = useFetcher<GetBalanceResponse>("/balance");
 
     return (
         <div className="mt-3 mb-3">
-            Current Balance: { result.data !== null ? result.data.balance : 0 }
+            Current Balance: {result.data?.balance ?? 0}
         </div>
     )
 }
@@ -75,19 +43,19 @@ function SendCoinForm() {
     const handleChangePayTo = React.useCallback((ev: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         ev.preventDefault()
         let recipient = ev.currentTarget.value;
-        setParams((cur) => ({ ...cur, recipient: recipient }))
+        setParams((cur) => ({...cur, recipient: recipient}))
     }, []);
 
     const handleChangeValue = React.useCallback((ev: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         ev.preventDefault()
         let value = parseInt(ev.currentTarget.value);
-        setParams((cur) => ({ ...cur, value: value }))
+        setParams((cur) => ({...cur, value: value}))
     }, []);
 
     const handleChangeFee = React.useCallback((ev: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         ev.preventDefault()
         let fee = parseInt(ev.currentTarget.value);
-        setParams((cur) => ({ ...cur, fee: fee }))
+        setParams((cur) => ({...cur, fee: fee}))
     }, []);
 
     const handleSubmit = React.useCallback((ev: FormEvent<HTMLFormElement>) => {
