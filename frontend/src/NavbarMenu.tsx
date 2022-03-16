@@ -7,11 +7,11 @@ function NavbarMenu() {
             <BLinkContainer to="/show-my-address">
                 <BNavDropdown.Item>Show my address</BNavDropdown.Item>
             </BLinkContainer>
-            <BNavDropdown.Item href="#menu-keys">Load my Keys</BNavDropdown.Item>
+            <BNavDropdown.Item disabled={true}>Load my Keys</BNavDropdown.Item>
             <BLinkContainer to="/update-blockchain">
                 <BNavDropdown.Item>Update Blockchain</BNavDropdown.Item>
             </BLinkContainer>
-            <BNavDropdown.Item href="#menu-quit">Quit</BNavDropdown.Item>
+            <BNavDropdown.Item disabled={true}>Quit</BNavDropdown.Item>
         </BNavDropdown>
     )
 }
