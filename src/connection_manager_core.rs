@@ -347,6 +347,7 @@ impl ConnectionManagerCore {
         manager: Arc<Mutex<ConnectionManagerInner>>,
         interval: Duration,
     ) {
+        tokio::time::sleep(interval).await;
         debug!("check_peers_connection was called");
 
         // check peers
@@ -379,7 +380,6 @@ impl ConnectionManagerCore {
             Self::send_msg_to_nodes(Arc::clone(&manager), nodes, msg).await;
         }
 
-        tokio::time::sleep(interval).await;
         Self::check_peers_connection(manager, interval).await;
     }
 }

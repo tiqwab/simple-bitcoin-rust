@@ -1,15 +1,61 @@
 version: '3'
 services:
   server1:
-    image: simple-bitcoin/server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    # image: simple-bitcoin/server:latest
     command:
-      ["-l", "0.0.0.0:20011"]
+      ["-l", "server1:20011"]
+    environment:
+      RUST_LOG: debug
+
+  server2:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    # image: simple-bitcoin/server:latest
+    command:
+      ["-l", "server2:20012", "-c", "server1:20011"]
     environment:
       RUST_LOG: debug
 
   client1:
-    image: simple-bitcoin/client:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    # image: simple-bitcoin/client:latest
     command:
-      ["-l", "0.0.0.0:20013", "-c", "server1:20011"]
+      ["-l", "client1:20013", "-a", "0.0.0.0:30013", "-c", "server1:20011"]
     environment:
       RUST_LOG: debug
+    ports:
+      - "30013:30013"
+
+  client2:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    # image: simple-bitcoin/client:latest
+    command:
+      ["-l", "client2:20014", "-a", "0.0.0.0:30014", "-c", "server2:20012"]
+    environment:
+      RUST_LOG: debug
+    ports:
+      - "30014:30014"
+
+  ui1:
+    build:
+      context: ./frontend
+      args:
+        target_env: local1
+    ports:
+      - "8081:80"
+
+  ui2:
+    build:
+      context: ./frontend
+      args:
+        target_env: local2
+    ports:
+      - "8082:80"

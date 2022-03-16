@@ -1,12 +1,12 @@
-### Build
-
-```
-$ sudo docker image build -t simple-bitcoin/server:latest -f Dockerfile.server .
-$ sudo docker image build -t simple-bitcoin/client:latest -f Dockerfile.client .
-```
+Rust implementation of Simple Bitcoin, which is a simple blockchain developed in [ゼロから創る暗号通貨](https://peaks.cc/books/cryptocurrency).
 
 ### Run
 
 ```
-$ docker-compose up -d
+$ docker-compose up -d server1
+$ docker-compose up -d server2
+$ docker-compose up -d client1 client2
+$ docker-compose up -d ui1 ui2
 ```
+
+Two WebUIs are available on http://localhost:8081 and http://localhost:8082.
