@@ -47,6 +47,7 @@ services:
   ui1:
     build:
       context: ./frontend
+      dockerfile: docker/Dockerfile
       args:
         target_env: local1
     ports:
@@ -55,6 +56,7 @@ services:
   ui2:
     build:
       context: ./frontend
+      dockerfile: docker/Dockerfile
       args:
         target_env: local2
     ports:
