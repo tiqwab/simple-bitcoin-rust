@@ -4,10 +4,10 @@ Rust implementation of Simple Bitcoin, which is a simple blockchain developed in
 
 ```
 # Start containers
-$ docker-compose up -d server1
-$ docker-compose up -d server2
-$ docker-compose up -d client1 client2
-$ docker-compose up -d ui1 ui2
+$ docker-compose up -d --build server1
+$ docker-compose up -d --build server2
+$ docker-compose up -d --build client1 client2
+$ docker-compose up -d --build ui1 ui2
 
 # Generate coins for client1
 # (this is for test and should be executed only once)
