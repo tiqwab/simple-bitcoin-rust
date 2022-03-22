@@ -29,9 +29,9 @@ pub fn sha256(data: &[u8], nonce: &[u8]) -> String {
 
 pub fn hex_to_bytes(xs: String) -> Vec<u8> {
     fn h_to_n(x: u8) -> Option<u8> {
-        if b'a' <= x && b'f' >= x {
+        if (b'a'..=b'f').contains(&x) {
             Some(x - b'a' + 10)
-        } else if b'0' <= x && b'9' >= x {
+        } else if (b'0'..=b'9').contains(&x) {
             Some(x - b'0')
         } else {
             None

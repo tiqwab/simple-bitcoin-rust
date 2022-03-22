@@ -49,7 +49,7 @@ impl ConnectionManagerInner {
         let node_set = HashSet::<SocketAddr>::new();
         let edge_set = HashSet::<SocketAddr>::new();
         let mut manager = ConnectionManagerInner {
-            addr: addr.clone(),
+            addr,
             app_msg_handler: Box::new(app_msg_handler),
             core_node_set: node_set,
             edge_node_set: edge_set,
@@ -312,7 +312,7 @@ impl ConnectionManagerCore {
             manager.remove_peer(addr);
             return false;
         }
-        return true;
+        true
     }
 
     // 指定されたノードに対してメッセージを送信する
@@ -351,14 +351,14 @@ impl ConnectionManagerCore {
             debug!("check_peers_connection was called");
 
             // check peers
-            let manager_addr = manager.lock().unwrap().get_my_addr().clone();
+            let manager_addr = manager.lock().unwrap().get_my_addr();
             let target_nodes = manager.lock().unwrap().get_core_nodes();
             let mut failed_nodes = vec![];
             for node in target_nodes.iter() {
                 let payload = Payload::Ping;
                 let msg = Message::new(manager_addr.port(), payload);
                 if !Self::send_msg(Arc::clone(&manager), node, msg).await {
-                    failed_nodes.push(node.clone());
+                    failed_nodes.push(*node);
                 }
             }
 

@@ -25,8 +25,7 @@ impl TransactionInput {
     pub fn get_recipient(&self) -> Address {
         self.transaction
             .get_outputs()
-            .iter()
-            .nth(self.index)
+            .get(self.index)
             .unwrap()
             .recipient
             .clone()
@@ -35,8 +34,7 @@ impl TransactionInput {
     pub fn get_value(&self) -> u64 {
         self.transaction
             .get_outputs()
-            .iter()
-            .nth(self.index)
+            .get(self.index)
             .unwrap()
             .value
     }
@@ -75,7 +73,7 @@ impl Transaction {
     pub fn get_input(&self, idx: usize) -> Option<TransactionInput> {
         match self {
             Transaction::Coinbase(_) => None,
-            Transaction::Normal(tx) => tx.inputs.iter().nth(idx).cloned(),
+            Transaction::Normal(tx) => tx.inputs.get(idx).cloned(),
         }
     }
 
@@ -91,7 +89,7 @@ impl Transaction {
             Transaction::Coinbase(tx) if idx == 0 => {
                 Some(TransactionOutput::new(tx.recipient.clone(), tx.value))
             }
-            Transaction::Normal(tx) => tx.outputs.iter().nth(idx).cloned(),
+            Transaction::Normal(tx) => tx.outputs.get(idx).cloned(),
             _ => None,
         }
     }
@@ -165,7 +163,7 @@ impl NormalTransaction {
     }
 
     pub fn get_input(&self, idx: usize) -> Option<TransactionInput> {
-        self.inputs.iter().nth(idx).cloned()
+        self.inputs.get(idx).cloned()
     }
 
     pub fn get_inputs(&self) -> Vec<TransactionInput> {
@@ -173,7 +171,7 @@ impl NormalTransaction {
     }
 
     pub fn get_output(&self, idx: usize) -> Option<TransactionOutput> {
-        self.outputs.iter().nth(idx).cloned()
+        self.outputs.get(idx).cloned()
     }
 
     pub fn get_outputs(&self) -> Vec<TransactionOutput> {

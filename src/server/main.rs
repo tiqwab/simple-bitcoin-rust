@@ -37,7 +37,7 @@ async fn handle_signals(mut signals: Signals) {
 fn convert_to_addr(s: String) -> Result<SocketAddr> {
     s.to_socket_addrs()?
         .find(|x| x.is_ipv4())
-        .ok_or(anyhow!("Illegal address: {}", s))
+        .ok_or_else(|| anyhow!("Illegal address: {}", s))
 }
 
 #[tokio::main]
@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
 
     let bm = Arc::new(Mutex::new(BlockchainManager::new(3)));
     let tp = Arc::new(Mutex::new(TransactionPool::new()));
-    let km = Arc::new(Mutex::new(KeyManager::new(rng.clone()).unwrap()));
+    let km = Arc::new(Mutex::new(KeyManager::new(rng).unwrap()));
 
     let args = Args::parse();
     let listen_addr = convert_to_addr(args.listen_addr)?;

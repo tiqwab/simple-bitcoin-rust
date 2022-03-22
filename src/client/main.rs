@@ -42,7 +42,7 @@ async fn handle_signals(mut signals: Signals) {
 fn convert_to_addr(s: String) -> Result<SocketAddr> {
     s.to_socket_addrs()?
         .find(|x| x.is_ipv4())
-        .ok_or(anyhow!("Illegal address: {}", s))
+        .ok_or_else(|| anyhow!("Illegal address: {}", s))
 }
 
 #[tokio::main]
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     let api_addr = convert_to_addr(args.api_addr)?;
 
     let rng = OsRng;
-    let key_manager = Mutex::new(KeyManager::new(rng.clone()).unwrap());
+    let key_manager = Mutex::new(KeyManager::new(rng).unwrap());
     debug!("my address: {}", key_manager.lock().unwrap().get_address());
     let utxo_manager = Arc::new(Mutex::new(UTXOManager::new(
         key_manager.lock().unwrap().get_address(),

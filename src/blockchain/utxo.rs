@@ -24,7 +24,7 @@ impl UTXOManager {
     }
 
     /// 与えられた transaction 群から UTXO を再計算する。
-    pub fn refresh_utxos(&mut self, txs: &Vec<Transaction>) {
+    pub fn refresh_utxos(&mut self, txs: &[Transaction]) {
         let txs = self.extract_utxos(txs);
         self.transactions.clear();
         for tx in txs.into_iter() {
@@ -33,7 +33,7 @@ impl UTXOManager {
     }
 
     /// 与えられた Transaction 群の中から UTXO としてまだ利用可能なもののみを抽出する
-    fn extract_utxos(&self, txs: &Vec<Transaction>) -> Vec<Transaction> {
+    fn extract_utxos(&self, txs: &[Transaction]) -> Vec<Transaction> {
         let mut outputs = vec![];
         let mut inputs = vec![];
 
@@ -55,16 +55,10 @@ impl UTXOManager {
         outputs
             .into_iter()
             .filter(|output| {
-                inputs
+                !inputs
                     .iter()
-                    .find(|input| {
-                        input
-                            .get_inputs()
-                            .iter()
-                            .find(|i| output == i.get_transaction())
-                            .is_some()
-                    })
-                    .is_none()
+                    .flat_map(|tx| tx.get_inputs())
+                    .any(|i| output == i.get_transaction())
             })
             .collect::<Vec<_>>()
     }

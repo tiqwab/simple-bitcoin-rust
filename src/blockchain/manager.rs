@@ -114,37 +114,35 @@ impl BlockchainManager {
             .filter(|t| !other_chain.contains(t))
             .collect::<Vec<_>>();
 
-        let orphan_transactions = orphan_blocks
-            .into_iter()
-            .flat_map(|b| b.get_normal_transactions().to_owned())
-            .collect::<Vec<_>>();
-
         self.chain = other_chain;
 
         let main_transactions = self
             .chain
             .iter()
-            .flat_map(|b| b.get_normal_transactions().to_owned())
+            .flat_map(|b| b.get_normal_transactions())
             .collect::<Vec<_>>();
 
-        orphan_transactions
+        let orphan_transactions = orphan_blocks
             .into_iter()
-            .filter(|t| !main_transactions.contains(&t))
-            .collect()
+            .flat_map(|b| b.get_normal_transactions())
+            .filter(|t| !main_transactions.contains(t))
+            .collect();
+
+        orphan_transactions
     }
 
     pub fn is_valid_transaction(&self, tx: &NormalTransaction) -> Result<()> {
         // block 内に組み込まれた transaction か
         // TODO?: ただこれ pool は考慮しないので chain に埋め込まれてからでないと作成された UTXO を利用できない。
         // それは間違っていないんだけど使い勝手としてどうなんだろうか
-        fn does_exist_in_chain(target: &NormalTransaction, chain: &Vec<Block>) -> Result<()> {
+        fn does_exist_in_chain(target: &NormalTransaction, chain: &[Block]) -> Result<()> {
             for input in target.get_inputs() {
                 let tx_opt = chain
                     .iter()
                     .flat_map(|block| block.get_transactions())
                     .find(|tx| tx == input.get_transaction());
 
-                if let None = tx_opt {
+                if tx_opt.is_none() {
                     bail!("Invalid input is included in transaction (not exist in chain)");
                 }
             }
@@ -152,7 +150,7 @@ impl BlockchainManager {
         }
 
         // まだ使われていない transaction か
-        fn is_utxo(target: &NormalTransaction, chain: &Vec<Block>) -> Result<()> {
+        fn is_utxo(target: &NormalTransaction, chain: &[Block]) -> Result<()> {
             for target_input in target.get_inputs() {
                 let input_opt = chain
                     .iter()
@@ -160,7 +158,7 @@ impl BlockchainManager {
                     .flat_map(|tx| tx.get_inputs())
                     .find(|input| input == &target_input);
 
-                if let Some(_) = input_opt {
+                if input_opt.is_some() {
                     bail!("Invalid input is included in transaction (already used)");
                 }
             }
@@ -174,7 +172,7 @@ impl BlockchainManager {
 }
 
 /// 渡された chain が valid か確認する
-fn is_valid_chain(first_hash: BlockHash, chain: &Vec<Block>) -> Result<bool> {
+fn is_valid_chain(first_hash: BlockHash, chain: &[Block]) -> Result<bool> {
     let mut prev_block_hash = first_hash;
     for block in chain.iter() {
         if prev_block_hash != block.get_prev_block_hash() {

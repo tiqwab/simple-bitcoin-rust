@@ -52,7 +52,7 @@ impl ConnectionManagerInner {
         debug!("Current Core list: {:?}", self.core_node_set);
         match &self.current_core_node {
             Some(current_core_node) if current_core_node == peer => {
-                let new_core_node = self.core_node_set.iter().cloned().nth(0);
+                let new_core_node = self.core_node_set.iter().cloned().next();
                 debug!(
                     "Replace current_core_node({:?}) with {:?}",
                     self.current_core_node, new_core_node
@@ -241,7 +241,7 @@ impl ConnectionManagerEdge {
             manager.remove_peer(addr);
             return false;
         }
-        return true;
+        true
     }
 
     // 指定されたノードに対してメッセージを送信する
