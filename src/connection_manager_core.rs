@@ -342,44 +342,43 @@ impl ConnectionManagerCore {
 
     // 接続されている Core ノードすべての接続状況確認を行う
     // interval 毎に実行される
-    #[async_recursion::async_recursion]
     async fn check_peers_connection(
         manager: Arc<Mutex<ConnectionManagerInner>>,
         interval: Duration,
     ) {
-        tokio::time::sleep(interval).await;
-        debug!("check_peers_connection was called");
+        loop {
+            tokio::time::sleep(interval).await;
+            debug!("check_peers_connection was called");
 
-        // check peers
-        let manager_addr = manager.lock().unwrap().get_my_addr().clone();
-        let target_nodes = manager.lock().unwrap().get_core_nodes();
-        let mut failed_nodes = vec![];
-        for node in target_nodes.iter() {
-            let payload = Payload::Ping;
-            let msg = Message::new(manager_addr.port(), payload);
-            if !Self::send_msg(Arc::clone(&manager), node, msg).await {
-                failed_nodes.push(node.clone());
+            // check peers
+            let manager_addr = manager.lock().unwrap().get_my_addr().clone();
+            let target_nodes = manager.lock().unwrap().get_core_nodes();
+            let mut failed_nodes = vec![];
+            for node in target_nodes.iter() {
+                let payload = Payload::Ping;
+                let msg = Message::new(manager_addr.port(), payload);
+                if !Self::send_msg(Arc::clone(&manager), node, msg).await {
+                    failed_nodes.push(node.clone());
+                }
+            }
+
+            // remove disconnected nodes
+            {
+                let mut manager = manager.lock().unwrap();
+                for node in failed_nodes.iter() {
+                    manager.remove_peer(node);
+                }
+            }
+
+            // send core node list if necessary
+            if !failed_nodes.is_empty() {
+                let nodes = manager.lock().unwrap().get_core_nodes();
+                let payload = Payload::CoreList {
+                    nodes: nodes.clone(),
+                };
+                let msg = Message::new(manager_addr.port(), payload);
+                Self::send_msg_to_nodes(Arc::clone(&manager), nodes, msg).await;
             }
         }
-
-        // remove disconnected nodes
-        {
-            let mut manager = manager.lock().unwrap();
-            for node in failed_nodes.iter() {
-                manager.remove_peer(node);
-            }
-        }
-
-        // send core node list if necessary
-        if !failed_nodes.is_empty() {
-            let nodes = manager.lock().unwrap().get_core_nodes();
-            let payload = Payload::CoreList {
-                nodes: nodes.clone(),
-            };
-            let msg = Message::new(manager_addr.port(), payload);
-            Self::send_msg_to_nodes(Arc::clone(&manager), nodes, msg).await;
-        }
-
-        Self::check_peers_connection(manager, interval).await;
     }
 }

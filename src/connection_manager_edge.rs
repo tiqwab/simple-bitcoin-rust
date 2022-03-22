@@ -254,31 +254,31 @@ impl ConnectionManagerEdge {
 
     // 接続されている Core ノードすべての接続状況確認を行う
     // interval 毎に実行される
-    #[async_recursion::async_recursion]
     async fn check_peer_connection(
         manager: Arc<Mutex<ConnectionManagerInner>>,
         interval: Duration,
     ) {
-        debug!("check_peer_connection was called");
-        let manager_addr = manager.lock().unwrap().get_my_addr();
-        let core_node_addr = manager.lock().unwrap().get_current_core_node();
+        loop {
+            tokio::time::sleep(interval).await;
+            debug!("check_peer_connection was called");
 
-        if let Some(core_node_addr) = core_node_addr {
-            let payload = Payload::Ping;
-            let msg = Message::new(manager_addr.port(), payload);
+            let manager_addr = manager.lock().unwrap().get_my_addr();
+            let core_node_addr = manager.lock().unwrap().get_current_core_node();
 
-            if !Self::send_msg(Arc::clone(&manager), &core_node_addr, msg).await {
-                // remove disconnected
-                info!(
-                    "Couldn't connect to the current code node: {}",
-                    core_node_addr
-                );
-                manager.lock().unwrap().remove_peer(&core_node_addr);
-                Self::connect_to_core(Arc::clone(&manager)).await;
+            if let Some(core_node_addr) = core_node_addr {
+                let payload = Payload::Ping;
+                let msg = Message::new(manager_addr.port(), payload);
+
+                if !Self::send_msg(Arc::clone(&manager), &core_node_addr, msg).await {
+                    // remove disconnected
+                    info!(
+                        "Couldn't connect to the current code node: {}",
+                        core_node_addr
+                    );
+                    manager.lock().unwrap().remove_peer(&core_node_addr);
+                    Self::connect_to_core(Arc::clone(&manager)).await;
+                }
             }
         }
-
-        tokio::time::sleep(interval).await;
-        Self::check_peer_connection(manager, interval).await;
     }
 }
