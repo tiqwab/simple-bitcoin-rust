@@ -1,17 +1,12 @@
 use crate::ClientCore;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use anyhow::Result;
-use chrono::Utc;
-use log::{debug, error, warn};
+use actix_web::{get, post, web, HttpResponse, Responder};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use simple_bitcoin::blockchain::transaction::{
-    Address, NormalTransaction, TransactionInput, TransactionOutput,
-};
+use simple_bitcoin::blockchain::transaction::Address;
 use simple_bitcoin::blockchain::utxo::UTXOManager;
 use simple_bitcoin::key_manager::KeyManager;
 use simple_bitcoin::message::ApplicationPayload;
-use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 pub struct AppState {

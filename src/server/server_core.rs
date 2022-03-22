@@ -1,16 +1,14 @@
-use actix_web::web::block;
-use anyhow::{Context, Result};
+use anyhow::Context;
 use chrono::Utc;
 use log::{debug, info, warn};
-use simple_bitcoin::blockchain::block::BlockWithoutProof;
 use simple_bitcoin::blockchain::manager::BlockchainManager;
 use simple_bitcoin::blockchain::transaction::{
-    CoinbaseTransaction, NormalTransaction, TransactionInput, TransactionOutput, Transactions,
+    NormalTransaction, TransactionInput, TransactionOutput,
 };
 use simple_bitcoin::blockchain::transaction_pool::TransactionPool;
 use simple_bitcoin::connection_manager_core::{ApplicationPayloadHandler, ConnectionManagerCore};
 use simple_bitcoin::key_manager::KeyManager;
-use simple_bitcoin::message::{ApplicationPayload, Message, Payload};
+use simple_bitcoin::message::ApplicationPayload;
 use simple_bitcoin::util;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};

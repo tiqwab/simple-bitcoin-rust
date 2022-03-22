@@ -3,10 +3,7 @@ use crate::util;
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rsa::pkcs1::ToRsaPublicKey;
-use rsa::pkcs8::ToPrivateKey;
-use rsa::{Hash, PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
-use sha2::digest::Output;
-use sha2::{Digest, Sha256};
+use rsa::{PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
 pub struct KeyManager {
     private_key: RsaPrivateKey,

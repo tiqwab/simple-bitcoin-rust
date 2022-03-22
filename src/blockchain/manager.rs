@@ -2,8 +2,8 @@ use crate::blockchain::block::{Block, BlockHash};
 use crate::blockchain::transaction::{NormalTransaction, Transaction};
 use crate::blockchain::transaction_pool::TransactionPool;
 use crate::util;
-use anyhow::{anyhow, bail, Context, Result};
-use log::{debug, info, warn};
+use anyhow::{anyhow, bail, Result};
+use log::warn;
 use sha2::{Digest, Sha256};
 
 pub struct BlockchainManager {

@@ -1,5 +1,4 @@
 use log::{debug, info};
-use rand::prelude::*;
 use simple_bitcoin::blockchain::transaction::Transaction;
 use simple_bitcoin::blockchain::utxo::UTXOManager;
 use simple_bitcoin::connection_manager_edge::{ApplicationPayloadHandler, ConnectionManagerEdge};

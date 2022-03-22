@@ -3,7 +3,6 @@ use crate::blockchain::transaction::{
 };
 use anyhow::{bail, Result};
 use chrono::Utc;
-use log::debug;
 
 pub struct UTXOManager {
     my_address: Address,

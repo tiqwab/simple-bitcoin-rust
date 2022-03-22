@@ -1,7 +1,4 @@
-use crate::blockchain::transaction::{Address, TransactionSignature};
-use crate::key_manager;
 use anyhow::Result;
-use rsa::pkcs1::FromRsaPublicKey;
 use rsa::{Hash, PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 
